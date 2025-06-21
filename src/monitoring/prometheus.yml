@@ -1,0 +1,40 @@
+# Global config
+global:
+  scrape_interval: 15s # Set the scrape interval to every 15 seconds
+  evaluation_interval: 15s # Evaluate rules every 15 seconds
+  scrape_timeout: 10s # Timeout after 10 seconds
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "rules/trading_alerts.yml"
+  - "rules/system_alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Trading system metrics
+  - job_name: "trading_system"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          instance: "trading_dashboard"
+          environment: "production"
+
+  # Node exporter for host metrics
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          instance: "trading_host"
+          environment: "production"
+
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

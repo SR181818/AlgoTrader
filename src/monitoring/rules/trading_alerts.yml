@@ -1,0 +1,118 @@
+groups:
+  - name: trading_alerts
+    rules:
+      # System health alerts
+      - alert: TradingSystemDown
+        expr: trading_system_status == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Trading system is down"
+          description: "The trading system has been reporting unhealthy status for more than 1 minute."
+
+      # Account balance alerts
+      - alert: LowAccountBalance
+        expr: trading_account_balance{currency="USD"} < 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low account balance"
+          description: "Account balance is below $1,000 ({{ $value | printf \"%.2f\" }})"
+
+      # Drawdown alerts
+      - alert: HighDrawdown
+        expr: trading_drawdown_percent > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High drawdown detected"
+          description: "Current drawdown is {{ $value | printf \"%.2f\" }}%, which exceeds the 10% threshold"
+
+      - alert: CriticalDrawdown
+        expr: trading_drawdown_percent > 20
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical drawdown detected"
+          description: "Current drawdown is {{ $value | printf \"%.2f\" }}%, which exceeds the 20% threshold"
+
+      # Risk utilization alerts
+      - alert: HighRiskUtilization
+        expr: trading_risk_utilization_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High risk utilization"
+          description: "Risk utilization is {{ $value | printf \"%.2f\" }}%, which exceeds the 80% threshold"
+
+      # Position alerts
+      - alert: LargePosition
+        expr: trading_position_size > 5000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Large position detected"
+          description: "Position size for {{ $labels.symbol }} is ${{ $value | printf \"%.2f\" }}, which exceeds the $5,000 threshold"
+
+      # Performance alerts
+      - alert: HighOrderExecutionLatency
+        expr: histogram_quantile(0.95, sum(rate(trading_order_execution_time_seconds_bucket[5m])) by (symbol, le)) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High order execution latency"
+          description: "95th percentile of order execution time for {{ $labels.symbol }} is {{ $value | printf \"%.2f\" }}s, which exceeds the 5s threshold"
+
+      - alert: HighSignalLatency
+        expr: histogram_quantile(0.95, sum(rate(trading_signal_latency_seconds_bucket[5m])) by (symbol, timeframe, le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High signal generation latency"
+          description: "95th percentile of signal generation time for {{ $labels.symbol }}/{{ $labels.timeframe }} is {{ $value | printf \"%.2f\" }}s, which exceeds the 1s threshold"
+
+      # Data quality alerts
+      - alert: HighDataLatency
+        expr: trading_data_latency_seconds > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High data feed latency"
+          description: "Data feed latency for {{ $labels.symbol }}/{{ $labels.timeframe }} is {{ $value | printf \"%.2f\" }}s, which exceeds the 10s threshold"
+
+      - alert: LowDataQuality
+        expr: trading_data_quality_score < 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low data quality detected"
+          description: "Data quality score for {{ $labels.symbol }}/{{ $labels.timeframe }} is {{ $value | printf \"%.2f\" }}, which is below the 50 threshold"
+
+      # ML model alerts
+      - alert: LowMLPredictionAccuracy
+        expr: trading_ml_prediction_accuracy < 0.6
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low ML prediction accuracy"
+          description: "ML model {{ $labels.model_name }} has an accuracy of {{ $value | printf \"%.2f\" }}, which is below the 0.6 threshold"
+
+      - alert: HighMLPredictionLatency
+        expr: histogram_quantile(0.95, sum(rate(trading_ml_prediction_latency_seconds_bucket[5m])) by (model_name, le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High ML prediction latency"
+          description: "95th percentile of prediction time for model {{ $labels.model_name }} is {{ $value | printf \"%.2f\" }}s, which exceeds the 0.5s threshold"

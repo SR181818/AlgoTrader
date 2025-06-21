@@ -1,0 +1,99 @@
+groups:
+  - name: system_alerts
+    rules:
+      # CPU alerts
+      - alert: HighCPULoad
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU load"
+          description: "CPU load is {{ $value | printf \"%.2f\" }}%, which exceeds the 80% threshold for 5 minutes"
+
+      - alert: CriticalCPULoad
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU load"
+          description: "CPU load is {{ $value | printf \"%.2f\" }}%, which exceeds the 95% threshold for 1 minute"
+
+      # Memory alerts
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | printf \"%.2f\" }}%, which exceeds the 80% threshold for 5 minutes"
+
+      - alert: CriticalMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value | printf \"%.2f\" }}%, which exceeds the 95% threshold for 1 minute"
+
+      # Disk alerts
+      - alert: HighDiskUsage
+        expr: 100 - ((node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value | printf \"%.2f\" }}%, which exceeds the 80% threshold for 5 minutes"
+
+      - alert: CriticalDiskUsage
+        expr: 100 - ((node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100) > 95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk usage"
+          description: "Disk usage is {{ $value | printf \"%.2f\" }}%, which exceeds the 95% threshold for 1 minute"
+
+      # Network alerts
+      - alert: HighNetworkTraffic
+        expr: sum(rate(node_network_receive_bytes_total[5m]) + rate(node_network_transmit_bytes_total[5m])) / 1024 / 1024 > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High network traffic"
+          description: "Network traffic is {{ $value | printf \"%.2f\" }} MB/s, which exceeds the 100 MB/s threshold for 5 minutes"
+
+      # Process alerts
+      - alert: TooManyProcesses
+        expr: node_processes_state{state="running"} > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Too many processes"
+          description: "There are {{ $value }} running processes, which exceeds the 1000 threshold for 5 minutes"
+
+      # Node exporter alerts
+      - alert: NodeExporterDown
+        expr: up{job="node"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node exporter is down"
+          description: "Node exporter on {{ $labels.instance }} has been down for more than 5 minutes"
+
+      # Prometheus self-monitoring
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus on {{ $labels.instance }} has been down for more than 5 minutes"
