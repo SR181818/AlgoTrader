@@ -5,6 +5,7 @@ export * from './trend';
 export * from './volume';
 export * from './volatility';
 
+import Logger from '../logger';
 import { CandleData } from '../../types/trading';
 import { IndicatorResult, MultiValueIndicatorResult } from './base';
 import { calculateRSI, calculateStochastic, calculateWilliamsR, calculateROC, calculateCCI, calculateMFI } from './momentum';
@@ -232,7 +233,7 @@ export function calculateAllIndicators(
     }
     
   } catch (error) {
-    console.error('Error calculating indicators:', error);
+    Logger.error('Error calculating indicators:', error);
   }
   
   return indicators;

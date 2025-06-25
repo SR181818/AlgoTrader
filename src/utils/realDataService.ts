@@ -1,3 +1,4 @@
+import Logger from './logger';
 import { LiveMarketDataService } from '../services/LiveMarketDataService';
 import { MarketDataIntegrationService } from '../services/MarketDataIntegrationService';
 import { CandleData, MarketData } from '../types/trading';
@@ -8,11 +9,6 @@ const liveMarketDataService = new LiveMarketDataService({
   exchanges: [
     {
       name: 'binance',
-      testnet: true,
-      rateLimit: 1000
-    },
-    {
-      name: 'kucoin',
       testnet: true,
       rateLimit: 1000
     }
@@ -86,7 +82,7 @@ class RealDataService {
           }
         },
         error: (error) => {
-          console.error(`Error in data subscription for ${symbol}:${timeframe}:`, error);
+          Logger.error(`Error in data subscription for ${symbol}:${timeframe}:`, error);
         }
       });
     }

@@ -72,176 +72,71 @@ export const TRADING_PAIRS: TradingPair[] = [
     exchange: 'binance',
     ccxtSymbol: 'DOT/USDT'
   },
-  
-  // Major Forex pairs (OANDA)
   {
-    symbol: 'EUR/USD',
-    name: 'Euro / US Dollar',
-    category: 'forex',
-    baseAsset: 'EUR',
-    quoteAsset: 'USD',
-    minPrice: 0.8000,
-    maxPrice: 1.5000,
+    symbol: 'DOGE/USDT',
+    name: 'Dogecoin / Tether',
+    category: 'crypto',
+    baseAsset: 'DOGE',
+    quoteAsset: 'USDT',
+    minPrice: 0.00001,
+    maxPrice: 1,
     tickSize: 0.00001,
-    exchange: 'oanda',
-    ccxtSymbol: 'EUR/USD'
+    exchange: 'binance',
+    ccxtSymbol: 'DOGE/USDT'
   },
   {
-    symbol: 'GBP/USD',
-    name: 'British Pound / US Dollar',
-    category: 'forex',
-    baseAsset: 'GBP',
-    quoteAsset: 'USD',
-    minPrice: 1.0000,
-    maxPrice: 2.0000,
-    tickSize: 0.00001,
-    exchange: 'oanda',
-    ccxtSymbol: 'GBP/USD'
+    symbol: 'XRP/USDT',
+    name: 'Ripple / Tether',
+    category: 'crypto',
+    baseAsset: 'XRP',
+    quoteAsset: 'USDT',
+    minPrice: 0.0001,
+    maxPrice: 5,
+    tickSize: 0.0001,
+    exchange: 'binance',
+    ccxtSymbol: 'XRP/USDT'
   },
   {
-    symbol: 'USD/JPY',
-    name: 'US Dollar / Japanese Yen',
-    category: 'forex',
-    baseAsset: 'USD',
-    quoteAsset: 'JPY',
-    minPrice: 100.00,
-    maxPrice: 160.00,
+    symbol: 'LINK/USDT',
+    name: 'Chainlink / Tether',
+    category: 'crypto',
+    baseAsset: 'LINK',
+    quoteAsset: 'USDT',
+    minPrice: 0.001,
+    maxPrice: 100,
     tickSize: 0.001,
-    exchange: 'oanda',
-    ccxtSymbol: 'USD/JPY'
+    exchange: 'binance',
+    ccxtSymbol: 'LINK/USDT'
   },
   {
-    symbol: 'USD/CHF',
-    name: 'US Dollar / Swiss Franc',
-    category: 'forex',
-    baseAsset: 'USD',
-    quoteAsset: 'CHF',
-    minPrice: 0.8000,
-    maxPrice: 1.2000,
-    tickSize: 0.00001,
-    exchange: 'oanda',
-    ccxtSymbol: 'USD/CHF'
+    symbol: 'MATIC/USDT',
+    name: 'Polygon / Tether',
+    category: 'crypto',
+    baseAsset: 'MATIC',
+    quoteAsset: 'USDT',
+    minPrice: 0.0001,
+    maxPrice: 10,
+    tickSize: 0.0001,
+    exchange: 'binance',
+    ccxtSymbol: 'MATIC/USDT'
   },
   {
-    symbol: 'AUD/USD',
-    name: 'Australian Dollar / US Dollar',
-    category: 'forex',
-    baseAsset: 'AUD',
-    quoteAsset: 'USD',
-    minPrice: 0.6000,
-    maxPrice: 0.9000,
-    tickSize: 0.00001,
-    exchange: 'oanda',
-    ccxtSymbol: 'AUD/USD'
-  },
-  {
-    symbol: 'USD/CAD',
-    name: 'US Dollar / Canadian Dollar',
-    category: 'forex',
-    baseAsset: 'USD',
-    quoteAsset: 'CAD',
-    minPrice: 1.2000,
-    maxPrice: 1.6000,
-    tickSize: 0.00001,
-    exchange: 'oanda',
-    ccxtSymbol: 'USD/CAD'
-  },
-  {
-    symbol: 'NZD/USD',
-    name: 'New Zealand Dollar / US Dollar',
-    category: 'forex',
-    baseAsset: 'NZD',
-    quoteAsset: 'USD',
-    minPrice: 0.5000,
-    maxPrice: 0.8000,
-    tickSize: 0.00001,
-    exchange: 'oanda',
-    ccxtSymbol: 'NZD/USD'
-  },
-  
-  // Cross pairs
-  {
-    symbol: 'EUR/GBP',
-    name: 'Euro / British Pound',
-    category: 'forex',
-    baseAsset: 'EUR',
-    quoteAsset: 'GBP',
-    minPrice: 0.8000,
-    maxPrice: 1.0000,
-    tickSize: 0.00001,
-    exchange: 'oanda',
-    ccxtSymbol: 'EUR/GBP'
-  },
-  {
-    symbol: 'EUR/JPY',
-    name: 'Euro / Japanese Yen',
-    category: 'forex',
-    baseAsset: 'EUR',
-    quoteAsset: 'JPY',
-    minPrice: 120.00,
-    maxPrice: 170.00,
-    tickSize: 0.001,
-    exchange: 'oanda',
-    ccxtSymbol: 'EUR/JPY'
-  },
-  {
-    symbol: 'GBP/JPY',
-    name: 'British Pound / Japanese Yen',
-    category: 'forex',
-    baseAsset: 'GBP',
-    quoteAsset: 'JPY',
-    minPrice: 140.00,
-    maxPrice: 200.00,
-    tickSize: 0.001,
-    exchange: 'oanda',
-    ccxtSymbol: 'GBP/JPY'
-  },
-  
-  // Commodities (OANDA)
-  {
-    symbol: 'XAU/USD',
-    name: 'Gold / US Dollar',
-    category: 'commodities',
-    baseAsset: 'XAU',
-    quoteAsset: 'USD',
-    minPrice: 1500.00,
-    maxPrice: 2500.00,
+    symbol: 'AVAX/USDT',
+    name: 'Avalanche / Tether',
+    category: 'crypto',
+    baseAsset: 'AVAX',
+    quoteAsset: 'USDT',
+    minPrice: 0.01,
+    maxPrice: 500,
     tickSize: 0.01,
-    exchange: 'oanda',
-    ccxtSymbol: 'XAU/USD'
-  },
-  {
-    symbol: 'XAG/USD',
-    name: 'Silver / US Dollar',
-    category: 'commodities',
-    baseAsset: 'XAG',
-    quoteAsset: 'USD',
-    minPrice: 15.00,
-    maxPrice: 35.00,
-    tickSize: 0.001,
-    exchange: 'oanda',
-    ccxtSymbol: 'XAG/USD'
-  },
-  {
-    symbol: 'WTI/USD',
-    name: 'WTI Crude Oil / US Dollar',
-    category: 'commodities',
-    baseAsset: 'WTI',
-    quoteAsset: 'USD',
-    minPrice: 40.00,
-    maxPrice: 120.00,
-    tickSize: 0.01,
-    exchange: 'oanda',
-    ccxtSymbol: 'BCO/USD'
+    exchange: 'binance',
+    ccxtSymbol: 'AVAX/USDT'
   }
 ];
 
 export const CATEGORIES = [
   { id: 'all', name: 'All Markets', icon: '🌐' },
-  { id: 'crypto', name: 'Cryptocurrency', icon: '₿' },
-  { id: 'forex', name: 'Forex', icon: '💱' },
-  { id: 'commodities', name: 'Commodities', icon: '🥇' },
-  { id: 'stocks', name: 'Stocks', icon: '📈' }
+  { id: 'crypto', name: 'Cryptocurrency', icon: '₿' }
 ];
 
 export const DEFAULT_CONFIG = {
@@ -249,11 +144,11 @@ export const DEFAULT_CONFIG = {
   tickers: [
     'BTC/USDT',
     'ETH/USDT',
-    'EUR/USD',
-    'GBP/USD',
-    'USD/JPY',
-    'XAU/USD',
-    'XAG/USD'
+    'ADA/USDT',
+    'SOL/USDT',
+    'DOT/USDT',
+    'DOGE/USDT',
+    'XRP/USDT'
   ],
   indicators: {
     BB: { period: 20, stddev: 2 },

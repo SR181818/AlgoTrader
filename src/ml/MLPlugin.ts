@@ -1,10 +1,11 @@
 import { Observable, Subject } from 'rxjs';
+import Logger from '../utils/logger';
 import { CandleData } from '../types/trading';
 
 /**
  * Base interface for all ML model plugins
  */
-export interface MLPlugin {
+export interface MLPlugin<Input = unknown, Output = unknown> {
   id: string;
   name: string;
   version: string;
@@ -17,12 +18,12 @@ export interface MLPlugin {
   dispose(): void;
   
   // Model methods
-  predict(inputs: any): Promise<any>;
+  predict(inputs: Input): Promise<Output>;
   getMetadata(): MLPluginMetadata;
   
   // Optional training methods
   canTrain(): boolean;
-  train?(data: any, options?: any): Promise<TrainingResult>;
+  train?(data: Input, options?: Record<string, unknown>): Promise<TrainingResult>;
   
   // Events
   onError: Observable<Error>;
@@ -68,7 +69,7 @@ export interface TrainingResult {
 /**
  * Base abstract class for ML plugins
  */
-export abstract class BaseMLPlugin implements MLPlugin {
+export abstract class BaseMLPlugin<Input = unknown, Output = unknown> implements MLPlugin<Input, Output> {
   id: string;
   name: string;
   version: string;
@@ -89,7 +90,7 @@ export abstract class BaseMLPlugin implements MLPlugin {
   }
   
   abstract initialize(): Promise<boolean>;
-  abstract predict(inputs: any): Promise<any>;
+  abstract predict(inputs: Input): Promise<Output>;
   abstract dispose(): void;
   
   getMetadata(): MLPluginMetadata {
@@ -118,7 +119,7 @@ export abstract class BaseMLPlugin implements MLPlugin {
   }
   
   protected handleError(error: Error): void {
-    console.error(`[${this.name}] Error:`, error);
+    Logger.error(`[${this.name}] Error:`, error);
     this._errorSubject.next(error);
   }
 }
@@ -144,7 +145,7 @@ export class MLPluginRegistry {
       throw new Error(`Plugin with ID ${plugin.id} is already registered`);
     }
     this.plugins.set(plugin.id, plugin);
-    console.log(`Registered ML plugin: ${plugin.name} (${plugin.id})`);
+    Logger.info(`Registered ML plugin: ${plugin.name} (${plugin.id})`);
   }
   
   unregisterPlugin(pluginId: string): boolean {
@@ -152,7 +153,7 @@ export class MLPluginRegistry {
     if (plugin) {
       plugin.dispose();
       this.plugins.delete(pluginId);
-      console.log(`Unregistered ML plugin: ${plugin.name} (${plugin.id})`);
+      Logger.info(`Unregistered ML plugin: ${plugin.name} (${plugin.id})`);
       return true;
     }
     return false;

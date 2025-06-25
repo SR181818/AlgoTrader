@@ -31,6 +31,13 @@ export function SignalCard({ signal }: SignalCardProps) {
     }
   };
   
+  const formatPrice = (price: number) => {
+    return price.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+  
   return (
     <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
       <div className="flex items-center justify-between mb-4">
@@ -45,7 +52,7 @@ export function SignalCard({ signal }: SignalCardProps) {
         <div>
           <div className="text-gray-400 text-sm">Entry Price</div>
           <div className="text-white font-mono">
-            ${signal.entry_price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            ${formatPrice(signal.entry_price)}
           </div>
         </div>
         
@@ -61,7 +68,7 @@ export function SignalCard({ signal }: SignalCardProps) {
           <div>
             <div className="text-gray-400 text-sm">Stop Loss</div>
             <div className="text-red-400 font-mono text-sm">
-              ${signal.stop_loss.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              ${formatPrice(signal.stop_loss)}
             </div>
           </div>
         </div>
@@ -71,7 +78,7 @@ export function SignalCard({ signal }: SignalCardProps) {
           <div>
             <div className="text-gray-400 text-sm">Take Profit</div>
             <div className="text-green-400 font-mono text-sm">
-              ${signal.take_profit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              ${formatPrice(signal.take_profit)}
             </div>
           </div>
         </div>

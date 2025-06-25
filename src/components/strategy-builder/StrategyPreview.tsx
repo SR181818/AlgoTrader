@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { StrategyConfig } from '../../trading/StrategyRunner';
 import { 
@@ -8,7 +8,8 @@ import {
   AlertCircle, 
   CheckCircle, 
   Clock, 
-  DollarSign 
+  DollarSign,
+  Play as PlayIcon
 } from 'lucide-react';
 
 interface StrategyPreviewProps {
@@ -148,7 +149,7 @@ export function StrategyPreview({ strategy }: StrategyPreviewProps) {
           </select>
           
           <button className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white transition-colors">
-            <Play size={16} className="mr-2" />
+            <PlayIcon size={16} className="mr-2" />
             Run Test
           </button>
         </div>

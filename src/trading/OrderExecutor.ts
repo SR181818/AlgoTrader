@@ -1,6 +1,7 @@
 import ccxt from 'ccxt';
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { StrategySignal } from './StrategyRunner';
+import Logger from '../utils/logger';
 
 export interface OrderIntent {
   id: string;
@@ -177,7 +178,7 @@ export class OrderExecutor {
       this.startOrderMonitoring();
       
     } catch (error) {
-      console.error('Failed to initialize exchange:', error);
+      Logger.error('Failed to initialize exchange:', error);
       this.errorSubject.next({
         type: 'initialization_error',
         message: `Failed to initialize ${this.config.exchange}: ${error}`,
@@ -317,7 +318,7 @@ export class OrderExecutor {
         data: { order, error }
       });
       
-      console.error('Real order execution failed:', error);
+      Logger.error('Real order execution failed:', error);
     }
 
     this.orders.set(order.id, order);
@@ -416,7 +417,7 @@ export class OrderExecutor {
       order.lastUpdate = Date.now();
       
       this.stats.rejectedOrders++;
-      console.error('Paper order execution failed:', error);
+      Logger.error('Paper order execution failed:', error);
     }
 
     this.orders.set(order.id, order);
@@ -457,7 +458,7 @@ export class OrderExecutor {
       this.orderSubject.next(order);
       return true;
     } catch (error) {
-      console.error('Failed to cancel order:', error);
+      Logger.error('Failed to cancel order:', error);
       this.errorSubject.next({
         type: 'cancel_order_error',
         message: `Failed to cancel order ${orderId}: ${error}`,
@@ -602,7 +603,7 @@ export class OrderExecutor {
         await this.placeTakeProfit(intent, parentOrder);
       }
     } catch (error) {
-      console.error('Failed to place conditional orders:', error);
+      Logger.error('Failed to place conditional orders:', error);
       this.errorSubject.next({
         type: 'conditional_order_error',
         message: `Failed to place conditional orders: ${error}`,
@@ -644,7 +645,7 @@ export class OrderExecutor {
         );
         console.log(`Stop loss placed at ${intent.stopLoss}`);
       } catch (error) {
-        console.error('Failed to place stop loss:', error);
+        Logger.error('Failed to place stop loss:', error);
       }
     }
   }
@@ -682,7 +683,7 @@ export class OrderExecutor {
         );
         console.log(`Take profit placed at ${intent.takeProfit}`);
       } catch (error) {
-        console.error('Failed to place take profit:', error);
+        Logger.error('Failed to place take profit:', error);
       }
     }
   }
@@ -709,7 +710,7 @@ export class OrderExecutor {
       
       this.balanceSubject.next(this.balance);
     } catch (error) {
-      console.error('Failed to update balance:', error);
+      Logger.error('Failed to update balance:', error);
     }
   }
 
@@ -838,7 +839,7 @@ export class OrderExecutor {
         await this.updateBalance();
         await this.checkPendingOrders();
       } catch (error) {
-        console.error('Order monitoring error:', error);
+        Logger.error('Order monitoring error:', error);
       }
     }, 5000); // Check every 5 seconds
   }
@@ -875,7 +876,7 @@ export class OrderExecutor {
           }
         }
       } catch (error) {
-        console.error(`Failed to check order ${order.id}:`, error);
+        Logger.error(`Failed to check order ${order.id}:`, error);
       }
     }
   }

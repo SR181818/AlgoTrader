@@ -92,6 +92,11 @@ export default function LandingPage() {
                 <ArrowRight size={18} className="ml-2" />
               </Link>
               
+              <Link to="/premium-login" className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors flex items-center justify-center">
+                <Shield size={18} className="mr-2" />
+                Premium Access
+              </Link>
+              
               <a href="#features" className="px-8 py-4 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors flex items-center justify-center">
                 Learn More
                 <ChevronDown size={18} className="ml-2" />
@@ -187,8 +192,8 @@ export default function LandingPage() {
                 "Portfolio management",
                 "Risk management tools"
               ]}
-              buttonText="Upgrade to Pro"
-              buttonLink="/blockchain"
+              buttonText="Get Pro Access"
+              buttonLink="/premium-login"
               highlighted={false}
             />
           </div>
@@ -216,8 +221,9 @@ export default function LandingPage() {
                 <ArrowRight size={18} className="ml-2" />
               </Link>
               
-              <Link to="/blockchain" className="px-8 py-4 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors flex items-center justify-center">
-                View Pricing
+              <Link to="/premium-login" className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors flex items-center justify-center">
+                <Shield size={18} className="mr-2" />
+                Premium Access
               </Link>
             </div>
           </motion.div>
@@ -339,7 +345,9 @@ function PricingCard({
           className={`w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-lg shadow-sm text-sm font-medium transition-colors ${
             highlighted 
               ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-              : 'bg-gray-700 hover:bg-gray-600 text-white'
+              : title === 'Pro' 
+                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                : 'bg-gray-700 hover:bg-gray-600 text-white'
           }`}
         >
           {buttonText}

@@ -27,7 +27,7 @@ export default function TradingDashboardPage() {
   const [currentSignals, setCurrentSignals] = useState<Map<string, TradingSignal>>(new Map());
   const [trades, setTrades] = useState<Trade[]>([]);
   const [isLive, setIsLive] = useState(false);
-  const [showTradingDashboard, setShowTradingDashboard] = useState(false);
+  const [showTradingDashboard, setShowTradingDashboard] = useState(true);
   const [subscription, setSubscription] = useState<{tier: string, active: boolean} | null>(null);
   
   // Get metrics hook
@@ -306,6 +306,9 @@ export default function TradingDashboardPage() {
               {isLive ? 'Live Trading' : 'Start Live Mode'}
             </button>
           </div>
+          
+          {/* Configuration Panel */}
+          <ConfigPanel config={config} onConfigChange={setConfig} />
         </div>
       </div>
       

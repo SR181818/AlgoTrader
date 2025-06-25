@@ -1,4 +1,5 @@
 import { runSmokeTest } from './healthCheck';
+import Logger from './logger';
 
 /**
  * This script runs a smoke test on the trading system
@@ -21,14 +22,14 @@ async function main() {
     });
     
     if (!results.success) {
-      console.error('\n⚠️ Some tests failed. Please check the logs for details.');
+      Logger.error('\n⚠️ Some tests failed. Please check the logs for details.');
       process.exit(1);
     } else {
       console.log('\n🎉 All tests passed successfully!');
       process.exit(0);
     }
   } catch (error) {
-    console.error('Smoke test failed with unexpected error:', error);
+    Logger.error('Smoke test failed with unexpected error:', error);
     process.exit(1);
   }
 }

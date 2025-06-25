@@ -50,68 +50,64 @@ export function EquityCurveChart({ results }: EquityCurveChartProps) {
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-      <h3 className="text-lg font-semibold text-white mb-4">Equity Curve & Drawdown</h3>
-      
-      <div className="h-96">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis 
-              dataKey="date" 
-              stroke="#9CA3AF"
-              fontSize={12}
-              interval="preserveStartEnd"
-            />
-            <YAxis 
-              yAxisId="equity"
-              orientation="left"
-              stroke="#9CA3AF"
-              fontSize={12}
-              tickFormatter={formatCurrency}
-            />
-            <YAxis 
-              yAxisId="drawdown"
-              orientation="right"
-              stroke="#9CA3AF"
-              fontSize={12}
-              tickFormatter={formatPercent}
-            />
-            <Tooltip content={<CustomTooltip />} />
-            
-            {/* Initial balance reference line */}
-            <ReferenceLine 
-              yAxisId="equity"
-              y={results.equity[0].value} 
-              stroke="#6B7280" 
-              strokeDasharray="2 2"
-              label={{ value: "Initial Balance", position: "topLeft", fill: "#6B7280" }}
-            />
-            
-            {/* Equity curve */}
-            <Line 
-              yAxisId="equity"
-              type="monotone" 
-              dataKey="equity" 
-              stroke="#60A5FA" 
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, fill: "#60A5FA" }}
-            />
-            
-            {/* Drawdown */}
-            <Line 
-              yAxisId="drawdown"
-              type="monotone" 
-              dataKey="drawdown" 
-              stroke="#EF4444" 
-              strokeWidth={1}
-              dot={false}
-              strokeDasharray="3 3"
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+    <div className="h-96">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <XAxis 
+            dataKey="date" 
+            stroke="#9CA3AF"
+            fontSize={12}
+            interval="preserveStartEnd"
+          />
+          <YAxis 
+            yAxisId="equity"
+            orientation="left"
+            stroke="#9CA3AF"
+            fontSize={12}
+            tickFormatter={formatCurrency}
+          />
+          <YAxis 
+            yAxisId="drawdown"
+            orientation="right"
+            stroke="#9CA3AF"
+            fontSize={12}
+            tickFormatter={formatPercent}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          
+          {/* Initial balance reference line */}
+          <ReferenceLine 
+            yAxisId="equity"
+            y={results.equity[0].value} 
+            stroke="#6B7280" 
+            strokeDasharray="2 2"
+            label={{ value: "Initial Balance", position: "topLeft", fill: "#6B7280" }}
+          />
+          
+          {/* Equity curve */}
+          <Line 
+            yAxisId="equity"
+            type="monotone" 
+            dataKey="equity" 
+            stroke="#60A5FA" 
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4, fill: "#60A5FA" }}
+          />
+          
+          {/* Drawdown */}
+          <Line 
+            yAxisId="drawdown"
+            type="monotone" 
+            dataKey="drawdown" 
+            stroke="#EF4444" 
+            strokeWidth={1}
+            dot={false}
+            strokeDasharray="3 3"
+          />
+        </LineChart>
+      </ResponsiveContainer>
       
       <div className="mt-4 flex items-center justify-center space-x-6 text-xs">
         <div className="flex items-center">

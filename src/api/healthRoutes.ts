@@ -1,4 +1,5 @@
 import { performHealthCheck } from '../utils/healthCheck';
+import Logger from '../utils/logger';
 
 // Simulated REST API endpoints for health checks
 // In a real application, these would be Express.js routes or similar
@@ -16,7 +17,7 @@ export class HealthAPI {
         data: healthStatus 
       };
     } catch (error) {
-      console.error('Health check failed:', error);
+      Logger.error('Health check failed:', error, { method: 'getHealth' });
       return { 
         success: false, 
         data: { 
@@ -39,7 +40,7 @@ export class HealthAPI {
         data: healthStatus.checks.marketData 
       };
     } catch (error) {
-      console.error('Market data health check failed:', error);
+      Logger.error('Market data health check failed:', error, { method: 'getMarketDataHealth' });
       return { 
         success: false, 
         data: { 
@@ -62,7 +63,7 @@ export class HealthAPI {
         data: healthStatus.checks.strategy 
       };
     } catch (error) {
-      console.error('Strategy health check failed:', error);
+      Logger.error('Strategy health check failed:', error, { method: 'getStrategyHealth' });
       return { 
         success: false, 
         data: { 
@@ -85,7 +86,7 @@ export class HealthAPI {
         data: healthStatus.checks.orderExecutor 
       };
     } catch (error) {
-      console.error('Order executor health check failed:', error);
+      Logger.error('Order executor health check failed:', error, { method: 'getOrderExecutorHealth' });
       return { 
         success: false, 
         data: { 
@@ -96,3 +97,6 @@ export class HealthAPI {
     }
   }
 }
+
+// TODO: Add input validation for all health check endpoints
+// TODO: Add rate limiting middleware to all health check endpoints

@@ -6,11 +6,12 @@ import { calculateIndicators } from './utils/technicalIndicators';
 import { generateSignal } from './utils/signalGenerator';
 import { realDataService } from './utils/realDataService';
 import { TRADING_PAIRS, DEFAULT_CONFIG } from './data/tradingPairs';
-import { RootState } from './store/indicatorStore';
+import { RootState } from './store';
 import { Activity, Zap, BarChart3, Globe, Database, Library, Settings, Bell, Bot, Shield, LogOut, User } from 'lucide-react';
 import { MetricsProvider } from './monitoring/MetricsProvider';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotFoundPage from './components/NotFoundPage';
+import { PremiumLogin } from './components/PremiumLogin';
 
 // Import pages
 import TradingDashboardPage from './pages/TradingDashboardPage';
@@ -179,6 +180,7 @@ function AppContent() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage onLogin={() => setIsAuthenticated(true)} />} />
             <Route path="/register" element={<RegisterPage />} />
+            <Route path="/premium-login" element={<PremiumLogin />} />
             <Route path="/dashboard" element={
               <ProtectedRoute>
                 <TradingDashboardPage />

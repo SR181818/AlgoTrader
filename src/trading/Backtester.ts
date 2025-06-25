@@ -3,6 +3,7 @@ import { CandleData } from '../types/trading';
 import { StrategyRunner, StrategySignal, StrategyConfig } from './StrategyRunner';
 import { OrderExecutor, OrderIntent, Order, ExecutorConfig } from './OrderExecutor';
 import { RiskManager, RiskConfig } from './RiskManager';
+import Logger from '../utils/logger';
 
 export interface BacktestConfig {
   startDate: Date;
@@ -14,6 +15,9 @@ export interface BacktestConfig {
   replaySpeed: number; // 1 = real-time, 10 = 10x speed, etc.
   commission: number; // percentage per trade
   slippage: number; // percentage
+  symbol?: string; // Added symbol parameter
+  timeframe?: string; // Added timeframe parameter
+  epochs?: number; // Added epochs parameter
 }
 
 export interface BacktestResult {
@@ -81,9 +85,11 @@ export class Backtester {
   private progressSubject = new Subject<BacktestProgress>();
   private isRunning = false;
   private isPaused = false;
+  private candleIntervalMs: number;
 
   constructor(config: BacktestConfig) {
     this.config = config;
+    this.candleIntervalMs = this.getIntervalInMs(config.timeframe || '15m');
     this.strategyRunner = new StrategyRunner(config.strategy);
     this.orderExecutor = new OrderExecutor({
       ...config.executorConfig,
@@ -92,6 +98,23 @@ export class Backtester {
     this.riskManager = new RiskManager(config.riskConfig, config.initialBalance);
     
     this.setupEventHandlers();
+  }
+
+  /**
+   * Convert timeframe string to milliseconds
+   */
+  private getIntervalInMs(timeframe: string): number {
+    const timeframeMap: { [key: string]: number } = {
+      '1m': 60 * 1000,
+      '5m': 5 * 60 * 1000,
+      '15m': 15 * 60 * 1000,
+      '30m': 30 * 60 * 1000,
+      '1h': 60 * 60 * 1000,
+      '4h': 4 * 60 * 60 * 1000,
+      '1d': 24 * 60 * 60 * 1000,
+    };
+    
+    return timeframeMap[timeframe] || 15 * 60 * 1000; // Default to 15 minutes
   }
 
   /**
@@ -104,13 +127,45 @@ export class Backtester {
       this.candles = data;
     }
 
+    // Validate candles data
+    this.candles = this.candles.filter(candle => {
+      if (!candle || typeof candle !== 'object') {
+        console.warn('Invalid candle object:', candle);
+        return false;
+      }
+      
+      const requiredFields = ['timestamp', 'open', 'high', 'low', 'close', 'volume'];
+      const isValid = requiredFields.every(field => {
+        const value = candle[field as keyof CandleData];
+        return typeof value === 'number' && !isNaN(value);
+      });
+      
+      if (!isValid) {
+        console.warn('Invalid candle data:', candle);
+        return false;
+      }
+      
+      return true;
+    });
+
     // Filter data by date range
     this.candles = this.candles.filter(candle => {
       const candleDate = new Date(candle.timestamp);
       return candleDate >= this.config.startDate && candleDate <= this.config.endDate;
     });
 
-    console.log(`Loaded ${this.candles.length} candles for backtesting`);
+    // Sort candles by timestamp to ensure proper order
+    this.candles.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Check if we have any candles after filtering
+    if (this.candles.length === 0) {
+      throw new Error(
+        `No valid candles found within the specified date range (${this.config.startDate.toISOString()} to ${this.config.endDate.toISOString()}). ` +
+        'Please check your date range or ensure the data contains valid candles within this period.'
+      );
+    }
+
+    console.log(`Loaded ${this.candles.length} valid candles for backtesting`);
   }
 
   /**
@@ -139,7 +194,14 @@ export class Backtester {
               continue;
             }
 
-            await this.processCandle(this.candles[this.currentIndex]);
+            const currentCandle = this.candles[this.currentIndex];
+            if (!currentCandle) {
+              console.warn(`Undefined candle at index ${this.currentIndex}, skipping...`);
+              this.currentIndex++;
+              continue;
+            }
+
+            await this.processCandle(currentCandle);
             this.currentIndex++;
 
             // Emit progress
@@ -152,10 +214,19 @@ export class Backtester {
           }
 
           if (this.isRunning) {
+            // Close any remaining open trades
+            for (const [tradeId, trade] of this.openTrades.entries()) {
+              const lastCandle = this.candles[this.candles.length - 1];
+              if (lastCandle && lastCandle.close) {
+                this.closeTrade(tradeId, lastCandle.close, lastCandle.timestamp, 'end_of_backtest');
+              }
+            }
+            
             const result = this.generateResults();
             resolve(result);
           }
         } catch (error) {
+          Logger.error('Backtest error:', error);
           reject(error);
         }
       };
@@ -197,12 +268,19 @@ export class Backtester {
    * Process a single candle
    */
   private async processCandle(candle: CandleData): Promise<void> {
+    // Defensive check to ensure candle is valid
+    if (!candle || typeof candle.close !== 'number' || isNaN(candle.close)) {
+      console.warn('Invalid candle in processCandle:', candle);
+      return;
+    }
+
     // Update strategy with new candle
     this.strategyRunner.updateCandle(candle);
 
     // Update current equity
     const currentEquity = this.calculateCurrentEquity(candle.close);
-    this.equity.push({ timestamp: candle.timestamp, value: currentEquity });
+    // Use candle timestamp + interval to ensure strictly increasing timestamps
+    this.equity.push({ timestamp: candle.timestamp + this.candleIntervalMs, value: currentEquity });
 
     // Check for exit conditions on open trades
     this.checkExitConditions(candle);
@@ -216,14 +294,14 @@ export class Backtester {
    */
   private setupEventHandlers(): void {
     // Listen for strategy signals
-    this.strategyRunner.getStrategySignals().subscribe(signal => {
+    this.strategyRunner.getStrategySignals().subscribe((signal: any) => {
       if (signal.type !== 'HOLD') {
         this.handleStrategySignal(signal);
       }
     });
 
     // Listen for order updates
-    this.orderExecutor.getOrderUpdates().subscribe(order => {
+    this.orderExecutor.getOrderUpdates().subscribe((order: any) => {
       this.handleOrderUpdate(order);
     });
   }
@@ -233,13 +311,19 @@ export class Backtester {
    */
   private handleStrategySignal(signal: StrategySignal): void {
     const currentCandle = this.candles[this.currentIndex];
-    if (!currentCandle) return;
+    if (!currentCandle || typeof currentCandle.close !== 'number') {
+      console.warn('Invalid current candle for signal handling:', currentCandle);
+      return;
+    }
+
+    // Set symbol from config if not in signal
+    const symbol = signal.metadata.symbol || this.config.symbol || 'BTC/USDT';
 
     // Create order intent
     const orderIntent: OrderIntent = {
       id: `backtest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       signal,
-      symbol: signal.metadata.symbol || 'BTC/USDT',
+      symbol,
       side: signal.type === 'LONG' ? 'buy' : 'sell',
       amount: 0, // Will be calculated by risk manager
       price: currentCandle.close,
@@ -295,6 +379,12 @@ export class Backtester {
    * Check exit conditions for open trades
    */
   private checkExitConditions(candle: CandleData): void {
+    // Defensive check for candle validity
+    if (!candle || typeof candle.close !== 'number' || typeof candle.high !== 'number' || typeof candle.low !== 'number') {
+      console.warn('Invalid candle in checkExitConditions:', candle);
+      return;
+    }
+
     this.openTrades.forEach((trade, tradeId) => {
       let shouldExit = false;
       let exitReason = '';
@@ -347,6 +437,12 @@ export class Backtester {
     const trade = this.openTrades.get(tradeId);
     if (!trade) return;
 
+    // Validate exit price
+    if (typeof exitPrice !== 'number' || isNaN(exitPrice)) {
+      console.warn(`Invalid exit price for trade ${tradeId}:`, exitPrice);
+      return;
+    }
+
     // Calculate PnL
     const pnl = trade.side === 'buy' 
       ? (exitPrice - trade.entryPrice) * trade.quantity
@@ -383,11 +479,17 @@ export class Backtester {
    * Calculate current equity including open positions
    */
   private calculateCurrentEquity(currentPrice: number): number {
+    // Validate current price
+    if (typeof currentPrice !== 'number' || isNaN(currentPrice)) {
+      console.warn('Invalid current price for equity calculation:', currentPrice);
+      return this.config.initialBalance;
+    }
+
     let equity = this.config.initialBalance;
     
     // Add realized PnL from closed trades
     this.trades.forEach(trade => {
-      if (trade.pnl) {
+      if (trade.pnl && typeof trade.pnl === 'number' && !isNaN(trade.pnl)) {
         equity += trade.pnl;
       }
     });
@@ -397,7 +499,10 @@ export class Backtester {
       const unrealizedPnL = trade.side === 'buy'
         ? (currentPrice - trade.entryPrice) * trade.quantity
         : (trade.entryPrice - currentPrice) * trade.quantity;
-      equity += unrealizedPnL;
+      
+      if (typeof unrealizedPnL === 'number' && !isNaN(unrealizedPnL)) {
+        equity += unrealizedPnL;
+      }
     });
 
     return equity;
@@ -409,6 +514,11 @@ export class Backtester {
   private emitProgress(): void {
     const progress = (this.currentIndex / this.candles.length) * 100;
     const currentCandle = this.candles[this.currentIndex];
+    
+    if (!currentCandle || typeof currentCandle.close !== 'number') {
+      return; // Skip progress update if candle is invalid
+    }
+    
     const currentEquity = this.calculateCurrentEquity(currentCandle.close);
     const peak = Math.max(...this.equity.map(e => e.value));
     const currentDrawdown = (currentEquity - peak) / peak;
@@ -440,7 +550,7 @@ export class Backtester {
         peak = point.value;
       }
       const drawdown = (peak - point.value) / peak;
-      if (drawdown > maxDrawdown) {
+      if drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
       }
     });
@@ -497,6 +607,10 @@ export class Backtester {
    */
   private parseCSV(csvData: string): CandleData[] {
     const lines = csvData.trim().split('\n');
+    if (lines.length < 2) {
+      throw new Error('CSV data must contain at least a header and one data row');
+    }
+
     const header = lines[0].toLowerCase().split(',');
     
     const timestampIndex = header.findIndex(h => h.includes('timestamp') || h.includes('time') || h.includes('date'));
@@ -506,17 +620,53 @@ export class Backtester {
     const closeIndex = header.findIndex(h => h.includes('close'));
     const volumeIndex = header.findIndex(h => h.includes('volume'));
 
-    return lines.slice(1).map(line => {
-      const values = line.split(',');
-      return {
-        timestamp: new Date(values[timestampIndex]).getTime(),
-        open: parseFloat(values[openIndex]),
-        high: parseFloat(values[highIndex]),
-        low: parseFloat(values[lowIndex]),
-        close: parseFloat(values[closeIndex]),
-        volume: parseFloat(values[volumeIndex] || '0'),
-      };
-    }).filter(candle => !isNaN(candle.timestamp) && !isNaN(candle.close));
+    if (timestampIndex === -1 || openIndex === -1 || highIndex === -1 || lowIndex === -1 || closeIndex === -1) {
+      throw new Error('CSV must contain timestamp, open, high, low, and close columns');
+    }
+
+    const candles: CandleData[] = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',');
+      
+      if (values.length < Math.max(timestampIndex, openIndex, highIndex, lowIndex, closeIndex) + 1) {
+        console.warn(`Skipping line ${i + 1}: insufficient columns`);
+        continue;
+      }
+
+      try {
+        const timestamp = new Date(values[timestampIndex]).getTime();
+        const open = parseFloat(values[openIndex]);
+        const high = parseFloat(values[highIndex]);
+        const low = parseFloat(values[lowIndex]);
+        const close = parseFloat(values[closeIndex]);
+        const volume = volumeIndex !== -1 ? parseFloat(values[volumeIndex]) : 0;
+
+        // Validate parsed values
+        if (isNaN(timestamp) || isNaN(open) || isNaN(high) || isNaN(low) || isNaN(close)) {
+          console.warn(`Skipping line ${i + 1}: invalid numeric values`);
+          continue;
+        }
+
+        candles.push({
+          timestamp,
+          open,
+          high,
+          low,
+          close,
+          volume: isNaN(volume) ? 0 : volume,
+        });
+      } catch (error) {
+        console.warn(`Error parsing line ${i + 1}:`, error);
+        continue;
+      }
+    }
+
+    if (candles.length === 0) {
+      throw new Error('No valid candles could be parsed from CSV data');
+    }
+
+    return candles;
   }
 
   /**
@@ -535,7 +685,9 @@ export class Backtester {
     
     for (let i = 1; i < values.length; i++) {
       const dailyReturn = (values[i] - values[i - 1]) / values[i - 1];
-      returns.push(dailyReturn);
+      if (!isNaN(dailyReturn) && isFinite(dailyReturn)) {
+        returns.push(dailyReturn);
+      }
     }
 
     return returns;

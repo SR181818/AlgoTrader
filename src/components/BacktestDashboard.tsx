@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Backtester, BacktestConfig, BacktestResult, BacktestProgress } from '../trading/Backtester';
 import { StrategyRunner } from '../trading/StrategyRunner';
-import { RiskManager } from '../trading/RiskManager';
 import { CandleData } from '../types/trading';
 import { 
   Play, 
@@ -18,6 +17,7 @@ import {
   CheckCircle,
   Activity
 } from 'lucide-react';
+import { createChart, ColorType, LineStyle } from 'lightweight-charts';
 
 interface BacktestDashboardProps {
   onResultsGenerated?: (results: BacktestResult) => void;
@@ -30,6 +30,11 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
   const [progress, setProgress] = useState<BacktestProgress | null>(null);
   const [results, setResults] = useState<BacktestResult | null>(null);
   const [csvData, setCsvData] = useState<string>('');
+  const [sampleDataGenerated, setSampleDataGenerated] = useState(false);
+  const [sampleData, setSampleData] = useState<CandleData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedStrategy, setSelectedStrategy] = useState<string>("default");
   const [config, setConfig] = useState<Partial<BacktestConfig>>({
     startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
     endDate: new Date(),
@@ -37,16 +42,22 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     replaySpeed: 100,
     commission: 0.001,
     slippage: 0.001,
+    symbol: 'BTC/USDT',
+    timeframe: '15m',
+    epochs: 100
   });
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   // Initialize backtester when config changes
   useEffect(() => {
     if (config.startDate && config.endDate && config.initialBalance) {
+      const strategy = getStrategyByName(selectedStrategy);
+      
       const backtestConfig: BacktestConfig = {
         startDate: config.startDate,
         endDate: config.endDate,
         initialBalance: config.initialBalance,
-        strategy: StrategyRunner.createDefaultStrategy(),
+        strategy: strategy,
         riskConfig: {
           maxRiskPerTrade: 0.02,
           maxDailyDrawdown: 0.05,
@@ -70,6 +81,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         replaySpeed: config.replaySpeed || 100,
         commission: config.commission || 0.001,
         slippage: config.slippage || 0.001,
+        symbol: config.symbol || 'BTC/USDT',
+        timeframe: config.timeframe || '15m',
+        epochs: config.epochs || 100
       };
 
       const newBacktester = new Backtester(backtestConfig);
@@ -82,7 +96,100 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         newBacktester.dispose();
       };
     }
-  }, [config]);
+  }, [config, selectedStrategy]);
+
+  // Initialize chart when results are available
+  useEffect(() => {
+    if (results && chartContainerRef.current) {
+      // Clear previous chart
+      chartContainerRef.current.innerHTML = '';
+      
+      // Create chart
+      const chart = createChart(chartContainerRef.current, {
+        width: chartContainerRef.current.clientWidth,
+        height: 400,
+        layout: {
+          background: { type: ColorType.Solid, color: '#1f2937' },
+          textColor: '#d1d5db',
+        },
+        grid: {
+          vertLines: { color: '#374151' },
+          horzLines: { color: '#374151' },
+        },
+        rightPriceScale: {
+          borderColor: '#4b5563',
+        },
+        timeScale: {
+          borderColor: '#4b5563',
+        },
+      });
+      
+      // Add equity curve series
+      const equitySeries = chart.addLineSeries({
+        color: '#60A5FA',
+        lineWidth: 2,
+        title: 'Equity',
+      });
+      
+      // Add drawdown series
+      const drawdownSeries = chart.addLineSeries({
+        color: '#EF4444',
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        title: 'Drawdown',
+        priceScaleId: 'drawdown',
+      });
+      
+      // Configure drawdown scale
+      chart.priceScale('drawdown').applyOptions({
+        position: 'right',
+        scaleMargins: {
+          top: 0.8,
+          bottom: 0,
+        },
+      });
+      
+      // Prepare data with unique timestamps
+      const equityData = results.equity.map((point, index) => ({
+        time: Math.floor(point.timestamp / 1000) + index, // Add index to ensure unique timestamps
+        value: point.value,
+      }));
+      
+      // Calculate drawdown series
+      let peak = config.initialBalance || 10000;
+      const drawdownData = results.equity.map((point, index) => {
+        if (point.value > peak) peak = point.value;
+        const drawdownPercent = ((peak - point.value) / peak) * 100;
+        return {
+          time: Math.floor(point.timestamp / 1000) + index, // Add index to ensure unique timestamps
+          value: drawdownPercent,
+        };
+      });
+      
+      // Set data
+      equitySeries.setData(equityData);
+      drawdownSeries.setData(drawdownData);
+      
+      // Fit content
+      chart.timeScale().fitContent();
+      
+      // Handle resize
+      const resizeObserver = new ResizeObserver(() => {
+        if (chartContainerRef.current) {
+          chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+        }
+      });
+      
+      if (chartContainerRef.current) {
+        resizeObserver.observe(chartContainerRef.current);
+      }
+      
+      return () => {
+        resizeObserver.disconnect();
+        chart.remove();
+      };
+    }
+  }, [results, config.initialBalance]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -91,69 +198,97 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       reader.onload = (e) => {
         const csv = e.target?.result as string;
         setCsvData(csv);
+        setSampleDataGenerated(false); // Reset sample data flag when CSV is loaded
+        setSampleData([]);
       };
       reader.readAsText(file);
     }
   };
 
-  const generateSampleData = () => {
+  const generateSampleData = (): CandleData[] => {
     // Generate sample OHLCV data for demonstration
     const sampleData: CandleData[] = [];
     let basePrice = 45000;
     const startTime = config.startDate?.getTime() || Date.now() - 30 * 24 * 60 * 60 * 1000;
     
-    for (let i = 0; i < 1000; i++) {
-      const timestamp = startTime + (i * 15 * 60 * 1000); // 15-minute intervals
-      const volatility = 0.002;
-      const priceChange = (Math.random() - 0.5) * volatility;
+    try {
+      for (let i = 0; i < (config.epochs || 100) * 10; i++) {
+        const timestamp = startTime + (i * 15 * 60 * 1000); // 15-minute intervals
+        const volatility = 0.002;
+        const priceChange = (Math.random() - 0.5) * volatility;
+        
+        const open = basePrice;
+        basePrice = basePrice * (1 + priceChange);
+        const close = basePrice;
+        const high = Math.max(open, close) * (1 + Math.random() * volatility * 0.5);
+        const low = Math.min(open, close) * (1 - Math.random() * volatility * 0.5);
+        const volume = 100 + Math.random() * 1000;
+
+        // Validate the candle data
+        if (isNaN(timestamp) || isNaN(open) || isNaN(high) || isNaN(low) || isNaN(close) || isNaN(volume)) {
+          console.warn(`Invalid candle data at index ${i}:`, { timestamp, open, high, low, close, volume });
+          continue;
+        }
+
+        sampleData.push({
+          timestamp,
+          open,
+          high,
+          low,
+          close,
+          volume
+        });
+      }
+
+      console.log('Sample data generated:', sampleData.length, 'candles');
+      setSampleDataGenerated(true);
+      setSampleData(sampleData);
+      setCsvData(''); // Clear CSV data when sample data is generated
       
-      const open = basePrice;
-      basePrice = basePrice * (1 + priceChange);
-      const close = basePrice;
-      const high = Math.max(open, close) * (1 + Math.random() * volatility * 0.5);
-      const low = Math.min(open, close) * (1 - Math.random() * volatility * 0.5);
-      const volume = 100 + Math.random() * 1000;
-
-      sampleData.push({
-        timestamp,
-        open,
-        high,
-        low,
-        close,
-        volume
-      });
-    }
-
-    if (backtester) {
-      backtester.loadData(sampleData);
-      console.log('Sample data loaded');
+      return sampleData;
+    } catch (error) {
+      console.error('Error generating sample data:', error);
+      throw new Error(`Failed to generate sample data: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
   const startBacktest = async () => {
-    if (!backtester) return;
+    if (!backtester) {
+      setError('Backtester not initialized');
+      return;
+    }
 
     try {
+      setIsLoading(true);
       setIsRunning(true);
       setResults(null);
+      setError(null);
       
-      // Load data if CSV is provided
+      // Load data into backtester
       if (csvData) {
         backtester.loadData(csvData);
+      } else if (sampleDataGenerated && sampleData.length > 0) {
+        backtester.loadData(sampleData);
       } else {
-        generateSampleData();
+        // Generate sample data if none exists
+        const data = generateSampleData();
+        backtester.loadData(data);
       }
-
+      
+      // Run backtest
       const result = await backtester.startBacktest();
+      
       setResults(result);
-      setIsRunning(false);
       
       if (onResultsGenerated) {
         onResultsGenerated(result);
       }
     } catch (error) {
       console.error('Backtest failed:', error);
+      setError(`Backtest failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
       setIsRunning(false);
+      setIsLoading(false);
     }
   };
 
@@ -221,12 +356,67 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
 
+  // Get strategy by name
+  const getStrategyByName = (name: string) => {
+    switch (name) {
+      case "trend_following":
+        return StrategyRunner.createTrendFollowingStrategy();
+      case "default":
+      default:
+        return StrategyRunner.createDefaultStrategy();
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Configuration Panel */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
         <h2 className="text-xl font-bold text-white mb-4">Backtest Configuration</h2>
         
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Symbol</label>
+            <select
+              value={config.symbol || 'BTC/USDT'}
+              onChange={(e) => setConfig(prev => ({ ...prev, symbol: e.target.value }))}
+              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
+            >
+              <option value="BTC/USDT">BTC/USDT</option>
+              <option value="ETH/USDT">ETH/USDT</option>
+              <option value="SOL/USDT">SOL/USDT</option>
+              <option value="ADA/USDT">ADA/USDT</option>
+              <option value="DOT/USDT">DOT/USDT</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Timeframe</label>
+            <select
+              value={config.timeframe || '15m'}
+              onChange={(e) => setConfig(prev => ({ ...prev, timeframe: e.target.value }))}
+              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
+            >
+              <option value="1m">1 Minute</option>
+              <option value="5m">5 Minutes</option>
+              <option value="15m">15 Minutes</option>
+              <option value="30m">30 Minutes</option>
+              <option value="1h">1 Hour</option>
+              <option value="4h">4 Hours</option>
+              <option value="1d">1 Day</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-300 mb-1">Strategy</label>
+            <select
+              value={selectedStrategy}
+              onChange={(e) => setSelectedStrategy(e.target.value)}
+              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
+            >
+              <option value="default">Multi-Indicator Confluence</option>
+              <option value="trend_following">Trend Following</option>
+            </select>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm text-gray-300 mb-1">Start Date</label>
@@ -296,7 +486,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
 
         {/* Data Upload */}
         <div className="mb-4">
-          <label className="block text-sm text-gray-300 mb-2">Historical Data (CSV)</label>
+          <label className="block text-sm text-gray-300 mb-2">Historical Data (CSV or Generate Sample)</label>
           <div className="flex items-center space-x-4">
             <input
               type="file"
@@ -313,7 +503,14 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               Upload CSV
             </label>
             <button
-              onClick={generateSampleData}
+              onClick={() => {
+                try {
+                  const data = generateSampleData();
+                  setSampleData(data);
+                } catch (error) {
+                  setError(`Failed to generate sample data: ${error instanceof Error ? error.message : String(error)}`);
+                }
+              }}
               className="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white transition-colors"
             >
               <BarChart3 size={16} className="mr-2" />
@@ -321,6 +518,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             </button>
             {csvData && (
               <span className="text-green-400 text-sm">✓ CSV data loaded</span>
+            )}
+            {sampleDataGenerated && !csvData && (
+              <span className="text-purple-400 text-sm">✓ Sample data generated ({sampleData.length} candles)</span>
             )}
           </div>
         </div>
@@ -330,11 +530,11 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
           {!isRunning ? (
             <button
               onClick={startBacktest}
-              disabled={!backtester}
+              disabled={!backtester || isLoading || (!csvData && !sampleDataGenerated)}
               className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-white transition-colors"
             >
               <Play size={16} className="mr-2" />
-              Start Backtest
+              {isLoading ? 'Loading...' : 'Start Backtest'}
             </button>
           ) : (
             <>
@@ -354,7 +554,17 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               </button>
             </>
           )}
+          {!csvData && !sampleDataGenerated && (
+            <span className="text-yellow-400 text-sm">Please upload CSV data or generate sample data first</span>
+          )}
         </div>
+        
+        {error && (
+          <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400">
+            <AlertTriangle size={16} className="inline-block mr-2" />
+            {error}
+          </div>
+        )}
       </div>
 
       {/* Progress Display */}
@@ -427,7 +637,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <div>
                     <div className="text-gray-400 text-sm">Total Return</div>
                     <div className={`text-2xl font-bold ${results.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -445,7 +655,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               </div>
 
               <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <div>
                     <div className="text-gray-400 text-sm">Sharpe Ratio</div>
                     <div className="text-2xl font-bold text-white">
@@ -457,7 +667,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               </div>
 
               <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <div>
                     <div className="text-gray-400 text-sm">Max Drawdown</div>
                     <div className="text-2xl font-bold text-red-400">
@@ -469,7 +679,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               </div>
 
               <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <div>
                     <div className="text-gray-400 text-sm">Win Rate</div>
                     <div className="text-2xl font-bold text-white">
@@ -481,8 +691,11 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               </div>
             </div>
 
+            {/* Equity Curve Chart */}
+            <div className="h-96" ref={chartContainerRef}></div>
+
             {/* Detailed Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
               <div>
                 <h4 className="text-white font-medium mb-3">Trade Statistics</h4>
                 <div className="space-y-2 text-sm">
@@ -550,7 +763,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
           </div>
 
           {/* Recent Trades */}
-          <div className="bg-gray-800 rounded-lg border border-gray-700">
+          <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
             <div className="p-4 border-b border-gray-700">
               <h3 className="text-lg font-semibold text-white">Recent Trades</h3>
             </div>
@@ -588,9 +801,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                         </div>
                       </td>
                       <td className="p-4 text-right">
-                        <div className={`font-mono ${
-                          (trade.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-                        }`}>
+                        <div className={`font-mono ${(trade.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                           {trade.pnl ? formatCurrency(trade.pnl) : '-'}
                         </div>
                         {trade.pnlPercent && (

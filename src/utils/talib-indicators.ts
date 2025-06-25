@@ -1,5 +1,6 @@
 import * as TI from 'technicalindicators';
 import { CandleData } from '../types/trading';
+import Logger from './logger';
 
 export interface TALibIndicatorConfig {
   name: string;
@@ -317,7 +318,7 @@ export class TALibCalculator {
     try {
       const config = TALIB_INDICATORS.find(ind => ind.name === indicatorName);
       if (!config) {
-        console.error(`Indicator ${indicatorName} not found`);
+        Logger.error(`Indicator ${indicatorName} not found`);
         return null;
       }
 
@@ -446,7 +447,7 @@ export class TALibCalculator {
           });
           break;
         default:
-          console.error(`Calculation not implemented for ${indicatorName}`);
+          Logger.error(`Calculation not implemented for ${indicatorName}`);
           return null;
       }
 
@@ -468,7 +469,7 @@ export class TALibCalculator {
       };
 
     } catch (error) {
-      console.error(`Error calculating ${indicatorName}:`, error);
+      Logger.error(`Error calculating ${indicatorName}:`, error);
       return null;
     }
   }
@@ -576,7 +577,7 @@ export class TALibCalculator {
           }
       }
     } catch (error) {
-      console.error(`Error generating signals for ${indicatorName}:`, error);
+      Logger.error(`Error generating signals for ${indicatorName}:`, error);
       // Return neutral signals as fallback
       for (let i = 0; i < (Array.isArray(values) ? values.length : 1); i++) {
         signals.push('neutral');

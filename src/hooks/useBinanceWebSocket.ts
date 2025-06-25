@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Subscription } from 'rxjs';
 import { binanceWebSocketService, ConnectionStatus, StreamSubscription } from '../services/BinanceWebSocketService';
 import { CandleData } from '../types/trading';
+import Logger from '../utils/logger';
 
 export interface UseBinanceWebSocketOptions {
   autoConnect?: boolean;
@@ -22,16 +23,17 @@ export const useBinanceWebSocket = (options: UseBinanceWebSocketOptions = {}) =>
 
   // Monitor connection status
   useEffect(() => {
+    // TODO: Ensure all WebSocket connections are properly cleaned up on unmount
     const subscription = binanceWebSocketService.getConnectionStatus().subscribe({
       next: (status) => {
         setConnectionStatus(status);
         setIsConnected(status.status === 'connected');
         if (enableLogging) {
-          console.log('WebSocket status:', status);
+          Logger.info('WebSocket status:', status);
         }
       },
       error: (error) => {
-        console.error('Connection status error:', error);
+        Logger.error('Connection status error:', error);
       }
     });
 

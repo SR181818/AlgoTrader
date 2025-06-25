@@ -1,16 +1,26 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@prisma/client': 'src/fallback-prisma.js',
+    },
+  },
   optimizeDeps: {
-    exclude: ['lucide-react'],
+    exclude: ['@prisma/client'],
+  },
+  ssr: {
+    external: ['@prisma/client'],
+  },
+  build: {
+    rollupOptions: {
+      external: ['@prisma/client'],
+    },
   },
   define: {
-    // Provide empty process.env to avoid errors
     'process.env': {},
-    // Map global to window for browser compatibility
-    'global': 'window'
-  }
+    global: 'window',
+  },
 });

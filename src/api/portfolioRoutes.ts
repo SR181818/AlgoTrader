@@ -1,7 +1,19 @@
 import { PortfolioManager, Account, Portfolio, PortfolioMetrics, PortfolioPosition, PortfolioAllocation, PortfolioRiskLimits } from '../services/PortfolioManager';
+import Logger from '../utils/logger';
 
 // Simulated REST API endpoints for portfolio management
 // In a real application, these would be Express.js routes or similar
+
+// Common API response types
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+}
+
+export interface ApiErrorResponse {
+  success: false;
+  error: string;
+}
 
 export class PortfolioAPI {
   private portfolioManager: PortfolioManager;
@@ -15,21 +27,23 @@ export class PortfolioAPI {
    */
   
   // GET /api/accounts
-  async getAccounts(): Promise<{ success: boolean; data: Account[] }> {
+  async getAccounts(): Promise<ApiResponse<Account[]>> {
     try {
       const accounts = this.portfolioManager.getAllAccounts();
       return { success: true, data: accounts };
     } catch (error) {
+      Logger.error('Failed to get accounts:', error, { method: 'getAccounts' });
       throw new Error(`Failed to get accounts: ${error}`);
     }
   }
 
   // GET /api/accounts/:id
-  async getAccount(accountId: string): Promise<{ success: boolean; data: Account | null }> {
+  async getAccount(accountId: string): Promise<ApiResponse<Account | null>> {
     try {
       const account = this.portfolioManager.getAccount(accountId);
       return { success: true, data: account };
     } catch (error) {
+      Logger.error('Failed to get account:', error, { method: 'getAccount', accountId });
       throw new Error(`Failed to get account: ${error}`);
     }
   }
@@ -43,11 +57,12 @@ export class PortfolioAPI {
     apiSecret?: string;
     testnet: boolean;
     isActive: boolean;
-  }): Promise<{ success: boolean; data: Account }> {
+  }): Promise<ApiResponse<Account>> {
     try {
       const account = this.portfolioManager.createAccount(accountData);
       return { success: true, data: account };
     } catch (error) {
+      Logger.error('Failed to create account:', error, { method: 'createAccount', accountData });
       throw new Error(`Failed to create account: ${error}`);
     }
   }
@@ -61,6 +76,7 @@ export class PortfolioAPI {
       const account = this.portfolioManager.updateAccount(accountId, updates);
       return { success: true, data: account };
     } catch (error) {
+      Logger.error('Failed to update account:', error, { method: 'updateAccount', accountId, updates });
       throw new Error(`Failed to update account: ${error}`);
     }
   }
@@ -74,6 +90,7 @@ export class PortfolioAPI {
         message: deleted ? 'Account deleted successfully' : 'Account not found' 
       };
     } catch (error) {
+      Logger.error('Failed to delete account:', error, { method: 'deleteAccount', accountId });
       throw new Error(`Failed to delete account: ${error}`);
     }
   }
@@ -88,6 +105,7 @@ export class PortfolioAPI {
       const portfolios = this.portfolioManager.getAllPortfolios();
       return { success: true, data: portfolios };
     } catch (error) {
+      Logger.error('Failed to get portfolios:', error, { method: 'getPortfolios' });
       throw new Error(`Failed to get portfolios: ${error}`);
     }
   }
@@ -98,6 +116,7 @@ export class PortfolioAPI {
       const portfolio = this.portfolioManager.getPortfolio(portfolioId);
       return { success: true, data: portfolio };
     } catch (error) {
+      Logger.error('Failed to get portfolio:', error, { method: 'getPortfolio', portfolioId });
       throw new Error(`Failed to get portfolio: ${error}`);
     }
   }
@@ -114,6 +133,7 @@ export class PortfolioAPI {
       const portfolio = this.portfolioManager.createPortfolio(portfolioData);
       return { success: true, data: portfolio };
     } catch (error) {
+      Logger.error('Failed to create portfolio:', error, { method: 'createPortfolio', portfolioData });
       throw new Error(`Failed to create portfolio: ${error}`);
     }
   }
@@ -127,6 +147,7 @@ export class PortfolioAPI {
       const portfolio = this.portfolioManager.updatePortfolio(portfolioId, updates);
       return { success: true, data: portfolio };
     } catch (error) {
+      Logger.error('Failed to update portfolio:', error, { method: 'updatePortfolio', portfolioId, updates });
       throw new Error(`Failed to update portfolio: ${error}`);
     }
   }
@@ -140,6 +161,7 @@ export class PortfolioAPI {
         message: deleted ? 'Portfolio deleted successfully' : 'Portfolio not found' 
       };
     } catch (error) {
+      Logger.error('Failed to delete portfolio:', error, { method: 'deletePortfolio', portfolioId });
       throw new Error(`Failed to delete portfolio: ${error}`);
     }
   }
@@ -154,6 +176,7 @@ export class PortfolioAPI {
       const metrics = this.portfolioManager.getPortfolioMetrics(portfolioId);
       return { success: true, data: metrics };
     } catch (error) {
+      Logger.error('Failed to get portfolio metrics:', error, { method: 'getPortfolioMetrics', portfolioId });
       throw new Error(`Failed to get portfolio metrics: ${error}`);
     }
   }
@@ -164,6 +187,7 @@ export class PortfolioAPI {
       const positions = this.portfolioManager.getPortfolioPositions(portfolioId);
       return { success: true, data: positions };
     } catch (error) {
+      Logger.error('Failed to get portfolio positions:', error, { method: 'getPortfolioPositions', portfolioId });
       throw new Error(`Failed to get portfolio positions: ${error}`);
     }
   }
@@ -174,6 +198,7 @@ export class PortfolioAPI {
       const trades = this.portfolioManager.getPortfolioTrades(portfolioId);
       return { success: true, data: trades };
     } catch (error) {
+      Logger.error('Failed to get portfolio trades:', error, { method: 'getPortfolioTrades', portfolioId });
       throw new Error(`Failed to get portfolio trades: ${error}`);
     }
   }
@@ -184,6 +209,7 @@ export class PortfolioAPI {
       const allocations = this.portfolioManager.getPortfolioAllocations(portfolioId);
       return { success: true, data: allocations };
     } catch (error) {
+      Logger.error('Failed to get portfolio allocations:', error, { method: 'getPortfolioAllocations', portfolioId });
       throw new Error(`Failed to get portfolio allocations: ${error}`);
     }
   }
@@ -207,6 +233,7 @@ export class PortfolioAPI {
         message: updated ? 'Allocation updated successfully' : 'Allocation not found' 
       };
     } catch (error) {
+      Logger.error('Failed to update portfolio allocation:', error, { method: 'updatePortfolioAllocation', portfolioId, accountId, data });
       throw new Error(`Failed to update portfolio allocation: ${error}`);
     }
   }
@@ -221,6 +248,7 @@ export class PortfolioAPI {
       const limits = this.portfolioManager.getPortfolioRiskLimits(portfolioId);
       return { success: true, data: limits };
     } catch (error) {
+      Logger.error('Failed to get portfolio risk limits:', error, { method: 'getPortfolioRiskLimits', portfolioId });
       throw new Error(`Failed to get portfolio risk limits: ${error}`);
     }
   }
@@ -237,6 +265,7 @@ export class PortfolioAPI {
         message: updated ? 'Risk limits updated successfully' : 'Portfolio not found' 
       };
     } catch (error) {
+      Logger.error('Failed to update portfolio risk limits:', error, { method: 'updatePortfolioRiskLimits', portfolioId, updates });
       throw new Error(`Failed to update portfolio risk limits: ${error}`);
     }
   }
@@ -255,6 +284,7 @@ export class PortfolioAPI {
       const assessment = this.portfolioManager.assessPortfolioRisk(portfolioId);
       return { success: true, data: assessment };
     } catch (error) {
+      Logger.error('Failed to assess portfolio risk:', error, { method: 'assessPortfolioRisk', portfolioId });
       throw new Error(`Failed to assess portfolio risk: ${error}`);
     }
   }
@@ -269,7 +299,12 @@ export class PortfolioAPI {
       this.portfolioManager.startPortfolioMonitoring(portfolioId);
       return { success: true, message: 'Portfolio monitoring started' };
     } catch (error) {
+      Logger.error('Failed to start portfolio monitoring:', error, { method: 'startPortfolioMonitoring', portfolioId });
       throw new Error(`Failed to start portfolio monitoring: ${error}`);
     }
   }
 }
+
+// TODO: Add input validation for all API endpoints
+// TODO: Add rate limiting middleware to all API endpoints
+// TODO: Encrypt sensitive data (API keys, secrets) before storing or transmitting

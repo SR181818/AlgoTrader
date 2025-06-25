@@ -3,6 +3,7 @@ import { StripeService } from '../services/StripeService';
 import { SandboxService } from '../services/SandboxService';
 import { Plugin, PluginVersion, PluginRating, PluginCategory, PluginStatus } from '../models/PluginModel';
 import { User } from '../models/UserModel';
+import Logger from '../../../utils/logger';
 
 /**
  * API for the Plugin Marketplace
@@ -48,7 +49,7 @@ export class PluginMarketplaceAPI {
       
       return { success: true, data: plugins };
     } catch (error) {
-      console.error('Failed to get plugins:', error);
+      Logger.error('Failed to get plugins:', error, { method: 'getPlugins' });
       throw new Error('Failed to get plugins');
     }
   }
@@ -59,7 +60,7 @@ export class PluginMarketplaceAPI {
       const plugin = await this.pluginService.getPlugin(req.params.id);
       return { success: true, data: plugin };
     } catch (error) {
-      console.error('Failed to get plugin:', error);
+      Logger.error('Failed to get plugin:', error, { method: 'getPlugin', pluginId: req.params.id });
       throw new Error('Failed to get plugin');
     }
   }
@@ -83,7 +84,7 @@ export class PluginMarketplaceAPI {
       
       return { success: true, data: plugin };
     } catch (error) {
-      console.error('Failed to create plugin:', error);
+      Logger.error('Failed to create plugin:', error, { method: 'createPlugin', user: req.user });
       throw new Error('Failed to create plugin');
     }
   }
@@ -121,7 +122,7 @@ export class PluginMarketplaceAPI {
       const plugin = await this.pluginService.updatePlugin(req.params.id, req.body);
       return { success: true, data: plugin };
     } catch (error) {
-      console.error('Failed to update plugin:', error);
+      Logger.error('Failed to update plugin:', error, { method: 'updatePlugin', pluginId: req.params.id });
       throw new Error('Failed to update plugin');
     }
   }
@@ -148,7 +149,7 @@ export class PluginMarketplaceAPI {
         message: result ? 'Plugin deleted successfully' : 'Failed to delete plugin' 
       };
     } catch (error) {
-      console.error('Failed to delete plugin:', error);
+      Logger.error('Failed to delete plugin:', error, { method: 'deletePlugin', pluginId: req.params.id });
       throw new Error('Failed to delete plugin');
     }
   }

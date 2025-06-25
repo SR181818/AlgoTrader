@@ -1,6 +1,7 @@
 import { realDataService } from './realDataService';
 import { StrategyRunner } from '../trading/StrategyRunner';
 import { OrderExecutor } from '../trading/OrderExecutor';
+import Logger from './logger';
 
 /**
  * Performs a health check on the trading system
@@ -237,7 +238,7 @@ export async function runSmokeTest() {
     
     return results;
   } catch (error) {
-    console.error('Smoke test failed with unexpected error:', error);
+    Logger.error('Smoke test failed with unexpected error:', error);
     return {
       success: false,
       tests: [

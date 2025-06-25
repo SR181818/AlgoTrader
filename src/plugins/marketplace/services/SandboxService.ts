@@ -1,5 +1,6 @@
 import { VM, VMScript } from 'vm2';
 import { Plugin, PluginVersion } from '../models/PluginModel';
+import Logger from '../../../utils/logger';
 
 /**
  * Sandbox execution result
@@ -53,11 +54,21 @@ export class SandboxService {
       const vm = new VM({
         timeout: mergedOptions.timeout,
         sandbox: {
+          // Freeze global objects to prevent prototype pollution
+          Object,
+          Array,
+          Function,
+          JSON,
+          Math,
+          Date,
+          RegExp,
+          Error,
+          // Provide a safe console
           console: {
-            log: (...args: any[]) => console.log(`[Plugin ${plugin.id}]`, ...args),
-            error: (...args: any[]) => console.error(`[Plugin ${plugin.id}]`, ...args),
-            warn: (...args: any[]) => console.warn(`[Plugin ${plugin.id}]`, ...args),
-            info: (...args: any[]) => console.info(`[Plugin ${plugin.id}]`, ...args),
+            log: (...args: any[]) => Logger.info(`[Plugin ${plugin.id}]`, ...args),
+            error: (...args: any[]) => Logger.error(`[Plugin ${plugin.id}]`, ...args),
+            warn: (...args: any[]) => Logger.warn(`[Plugin ${plugin.id}]`, ...args),
+            info: (...args: any[]) => Logger.info(`[Plugin ${plugin.id}]`, ...args),
           },
           input,
           ...mergedOptions.context
@@ -134,9 +145,9 @@ export class SandboxService {
         memoryUsage: endMemory - startMemory
       };
     } catch (error) {
+      Logger.error('Sandbox execution error:', error);
       const endTime = Date.now();
       const endMemory = process.memoryUsage().heapUsed;
-      
       return {
         success: false,
         error: (error as Error).message,
@@ -225,7 +236,7 @@ export class SandboxService {
       
       return metadata;
     } catch (error) {
-      console.error('Failed to extract plugin metadata:', error);
+      Logger.error('Failed to extract plugin metadata:', error);
       return null;
     }
   }

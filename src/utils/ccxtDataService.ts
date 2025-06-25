@@ -1,5 +1,6 @@
 import ccxt from 'ccxt';
 import { CandleData, MarketData, TradingPair } from '../types/trading';
+import Logger from './logger';
 
 class CCXTDataService {
   private exchanges: Map<string, ccxt.Exchange> = new Map();
@@ -18,7 +19,7 @@ class CCXTDataService {
     try {
       // Check if CCXT constructors are available in browser environment
       if (typeof ccxt.binance !== 'function' || typeof ccxt.oanda !== 'function') {
-        console.log('CCXT not available in browser environment, switching to demo mode');
+        Logger.info('CCXT not available in browser environment, switching to demo mode');
         this.initializeDemoMode();
         return;
       }
@@ -50,16 +51,16 @@ class CCXTDataService {
 
       this.isInitialized = true;
       this.isRealMode = true;
-      console.log('CCXT exchanges initialized successfully');
+      Logger.info('CCXT exchanges initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize CCXT exchanges:', error);
+      Logger.error('Failed to initialize CCXT exchanges:', error);
       // Fallback to demo mode if CCXT fails
       this.initializeDemoMode();
     }
   }
 
   private initializeDemoMode() {
-    console.log('Running in demo mode with simulated data');
+    Logger.info('Running in demo mode with simulated data');
     this.isInitialized = true;
     this.isRealMode = false;
     // Initialize with demo data similar to the previous implementation
@@ -199,16 +200,19 @@ class CCXTDataService {
 
       const ohlcv = await exchange.fetchOHLCV(pair.ccxtSymbol, timeframe, undefined, limit);
       
-      return ohlcv.map(([timestamp, open, high, low, close, volume]) => ({
-        timestamp,
-        open,
-        high,
-        low,
-        close,
-        volume
-      }));
+      return ohlcv.map((candle: [number, number, number, number, number, number]) => {
+        const [timestamp, open, high, low, close, volume] = candle;
+        return {
+          timestamp,
+          open,
+          high,
+          low,
+          close,
+          volume
+        };
+      });
     } catch (error) {
-      console.error(`Failed to fetch OHLCV for ${symbol}:`, error);
+      Logger.error(`Failed to fetch OHLCV for ${symbol}:`, error);
       // Return simulated data as fallback
       return this.getSimulatedCandles(symbol, timeframe);
     }
@@ -250,7 +254,7 @@ class CCXTDataService {
         spread: ticker.ask && ticker.bid ? ticker.ask - ticker.bid : undefined
       };
     } catch (error) {
-      console.error(`Failed to fetch ticker for ${symbol}:`, error);
+      Logger.error(`Failed to fetch ticker for ${symbol}:`, error);
       // Return simulated data as fallback
       return this.getSimulatedMarketData(symbol);
     }
@@ -355,7 +359,7 @@ class CCXTDataService {
         timeframe
       });
     } catch (error) {
-      console.error('Failed to send initial data:', error);
+      Logger.error('Failed to send initial data:', error);
     }
   }
 
@@ -378,6 +382,7 @@ class CCXTDataService {
               type: 'market_data',
               data: marketData
             });
+
             callback({
               type: 'candle_data',
               data: candles,
@@ -386,7 +391,7 @@ class CCXTDataService {
           });
         }
       } catch (error) {
-        console.error(`Failed to update data for ${key}:`, error);
+        Logger.error('Error in real-time updates:', error);
       }
     }, updateInterval);
 
@@ -400,25 +405,6 @@ class CCXTDataService {
       this.updateIntervals.delete(key);
     }
   }
-
-  getMarketData(symbol: string): MarketData | undefined {
-    return this.marketData.get(symbol);
-  }
-
-  getCandleData(symbol: string, timeframe: string): CandleData[] | undefined {
-    const symbolCandles = this.candleData.get(symbol);
-    return symbolCandles?.get(timeframe);
-  }
-
-  getAllMarketData(): MarketData[] {
-    return Array.from(this.marketData.values());
-  }
-
-  disconnect() {
-    this.updateIntervals.forEach(interval => clearInterval(interval));
-    this.updateIntervals.clear();
-    this.subscribers.clear();
-  }
 }
 
-export const ccxtDataService = new CCXTDataService();
+export default CCXTDataService;

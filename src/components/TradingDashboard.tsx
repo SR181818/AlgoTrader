@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { StrategyRunner, StrategySignal } from '../trading/StrategyRunner';
-import { OrderExecutor, Position } from '../trading/OrderExecutor';
+import { OrderExecutor, Position, Order } from '../trading/OrderExecutor';
 import { RiskManager } from '../trading/RiskManager';
-import { Backtester, BacktestConfig, BacktestResult } from '../trading/Backtester';
-import { NotificationService } from '../services/NotificationService';
-import { binanceWebSocketService } from '../services/BinanceWebSocketService';
-import { CandleData } from '../types/trading';
+import { CandleData, TradingSignal, Trade, MarketData } from '../types/trading';
+import { realDataService } from '../utils/realDataService';
 import { PnLGauge } from './dashboard/PnLGauge';
 import { OpenPositionsTable } from './dashboard/OpenPositionsTable';
 import { SignalEventLog } from './dashboard/SignalEventLog';
 import { SettingsPanel } from './dashboard/SettingsPanel';
-import { Play, Pause, Square, BarChart3, Settings, TestTube } from 'lucide-react';
+import { TradingBot } from './TradingBot';
+import { TradingBotConfig } from '../services/TradingBotService';
+import { Play, Pause, Square, BarChart3, Settings, TestTube, AlertTriangle, Zap } from 'lucide-react';
+import { useMetrics } from '../monitoring/MetricsProvider';
 
 interface TradingDashboardProps {
   symbol: string;
@@ -40,52 +41,95 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     emergencyStopLoss: 0.10,
     cooldownPeriod: 60,
   }, 10000));
-  const [notificationService] = useState(() => new NotificationService(
-    { enabled: false, address: '' },
-    { enabled: false, botToken: '', chatId: '' },
-    { enabled: false, url: '' }
-  ));
 
   // State
   const [isLiveTrading, setIsLiveTrading] = useState(false);
   const [strategySignals, setStrategySignals] = useState<StrategySignal[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [accountBalance, setAccountBalance] = useState(10000);
   const [dailyPnL, setDailyPnL] = useState(0);
   const [totalPnL, setTotalPnL] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
-  const [showBacktest, setShowBacktest] = useState(false);
-  const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
-  const [isBacktesting, setIsBacktesting] = useState(false);
+  const [candleData, setCandleData] = useState<CandleData[]>([]);
+  const [marketData, setMarketData] = useState<MarketData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showTradingBot, setShowTradingBot] = useState(false);
+  const [manualOrderAmount, setManualOrderAmount] = useState(0.001);
+  const [manualOrderSide, setManualOrderSide] = useState<'buy' | 'sell'>('buy');
+  const [isExecutingOrder, setIsExecutingOrder] = useState(false);
+  
+  // Trading bot configuration
+  const tradingBotConfig: TradingBotConfig = {
+    exchange: 'binance',
+    testnet: true,
+    tradingEnabled: false,
+    symbols: [symbol],
+    maxPositions: 3,
+    maxLeverage: 1,
+    riskPerTrade: 0.02,
+    stopLossPercent: 0.02,
+    takeProfitPercent: 0.04
+  };
+  
+  // Get metrics hook
+  const { 
+    recordSignal, 
+    recordTrade, 
+    recordCandleData, 
+    setSystemHealth 
+  } = useMetrics();
 
-  // WebSocket connection
+  // Subscribe to live data for selected symbol and timeframe
   useEffect(() => {
-    if (isLiveTrading) {
-      const subscription = binanceWebSocketService.subscribeToCandleStream(symbol, timeframe)
-        .subscribe({
-          next: (candle: CandleData) => {
-            strategyRunner.updateCandle(candle);
-          },
-          error: (error) => {
-            console.error('WebSocket error:', error);
-            notificationService.sendNotification({
-              type: 'alert',
-              title: 'Connection Error',
-              message: 'Lost connection to market data feed',
-              priority: 'high',
-              timestamp: Date.now(),
-            });
+    const handleDataUpdate = (update: any) => {
+      if (update.type === 'market_data') {
+        setMarketData(update.data);
+        setSystemHealth(true); // Update system health status
+      } else if (update.type === 'candle_data') {
+        setCandleData(update.data);
+        
+        // Record candle data for metrics
+        if (update.data.length > 0) {
+          const latestCandle = update.data[update.data.length - 1];
+          const latencyMs = Date.now() - latestCandle.timestamp;
+          recordCandleData(symbol, timeframe, 'realtime', latestCandle, latencyMs);
+          
+          // Update strategy with new candle when live trading is enabled
+          if (isLiveTrading) {
+            strategyRunner.updateCandle(latestCandle);
           }
-        });
+        }
+      }
+    };
 
-      return () => subscription.unsubscribe();
-    }
-  }, [isLiveTrading, symbol, timeframe]);
+    realDataService.subscribe(symbol, timeframe, handleDataUpdate);
+    
+    return () => {
+      realDataService.unsubscribe(symbol, timeframe, handleDataUpdate);
+    };
+  }, [symbol, timeframe, isLiveTrading, recordCandleData, setSystemHealth, strategyRunner]);
 
   // Strategy signals subscription
   useEffect(() => {
     const subscription = strategyRunner.getStrategySignals().subscribe(signal => {
       setStrategySignals(prev => [signal, ...prev.slice(0, 99)]);
+      
+      // Record signal metrics
+      const startTime = performance.now();
+      const latencyMs = performance.now() - startTime;
+      recordSignal({
+        signal: signal.type === 'LONG' ? 'buy' : signal.type === 'SHORT' ? 'sell' : 'hold',
+        ticker: symbol,
+        timeframe,
+        entry_price: signal.price,
+        stop_loss: signal.metadata.stopLoss || signal.price * 0.98,
+        take_profit: signal.metadata.takeProfit || signal.price * 1.02,
+        confidence: signal.confidence,
+        timestamp: signal.timestamp,
+        indicators: {} as any,
+        reasoning: signal.reasoning
+      }, latencyMs);
       
       // Execute trade if live trading is enabled
       if (isLiveTrading && signal.type !== 'HOLD') {
@@ -94,12 +138,15 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     });
 
     return () => subscription.unsubscribe();
-  }, [isLiveTrading]);
+  }, [isLiveTrading, recordSignal, symbol, timeframe]);
 
   // Order executor subscriptions
   useEffect(() => {
     const orderSub = orderExecutor.getOrderUpdates().subscribe(order => {
-      console.log('Order update:', order);
+      setOrders(prev => {
+        const updated = prev.filter(o => o.id !== order.id);
+        return [...updated, order].sort((a, b) => b.timestamp - a.timestamp);
+      });
     });
 
     const positionSub = orderExecutor.getPositionUpdates().subscribe(position => {
@@ -110,7 +157,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     });
 
     const balanceSub = orderExecutor.getBalanceUpdates().subscribe(balance => {
-      const usdtBalance = balance.USDT || 0;
+      const usdtBalance = balance.USDT?.total || 0;
       setAccountBalance(usdtBalance);
       setTotalPnL(usdtBalance - 10000);
     });
@@ -124,6 +171,11 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
 
   const handleStrategySignal = async (signal: StrategySignal) => {
     try {
+      if (!marketData) {
+        setError("Cannot execute trade: No market data available");
+        return;
+      }
+      
       // Risk assessment
       const riskAssessment = riskManager.assessTradeRisk(
         signal.metadata.symbol || symbol,
@@ -135,7 +187,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
       );
 
       if (!riskAssessment.approved) {
-        console.log('Trade rejected by risk manager:', riskAssessment.restrictions);
+        setError(`Trade rejected by risk manager: ${riskAssessment.restrictions.join(', ')}`);
         return;
       }
 
@@ -145,103 +197,164 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         signal,
         symbol: signal.metadata.symbol || symbol,
         side: signal.type === 'LONG' ? 'buy' : 'sell' as 'buy' | 'sell',
-        amount: riskAssessment.positionSize.recommendedSize,
+        amount: riskAssessment.positionSize.recommendedSize || 0.01, // Use recommended size or fallback
         price: signal.price,
         stopLoss: signal.metadata.stopLoss,
         takeProfit: signal.metadata.takeProfit,
-        timestamp: Date.now(),
+        timestamp: Date.now()
       };
 
-      await orderExecutor.executeOrder(orderIntent);
-
-      // Send notification
-      notificationService.sendNotification({
-        type: 'trade',
-        title: 'Trade Executed',
-        message: `${signal.type} signal executed for ${symbol}`,
-        data: { signal, orderIntent },
-        priority: 'medium',
-        timestamp: Date.now(),
+      const order = await orderExecutor.executeOrder(orderIntent);
+      
+      // Record trade metrics
+      recordTrade({
+        id: order.id,
+        symbol: order.intent.symbol,
+        timeframe,
+        signal: {
+          signal: signal.type === 'LONG' ? 'buy' : signal.type === 'SHORT' ? 'sell' : 'hold',
+          ticker: symbol,
+          timeframe,
+          entry_price: signal.price,
+          stop_loss: signal.metadata.stopLoss || signal.price * 0.98,
+          take_profit: signal.metadata.takeProfit || signal.price * 1.02,
+          confidence: signal.confidence,
+          timestamp: signal.timestamp,
+          indicators: {} as any,
+          reasoning: signal.reasoning
+        },
+        status: 'open',
+        entry_time: Date.now(),
+        size: order.executedAmount * order.executedPrice
       });
-
+      
+      setError(null);
     } catch (error) {
       console.error('Failed to execute trade:', error);
+      setError(`Failed to execute trade: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
   const startLiveTrading = () => {
     setIsLiveTrading(true);
-    notificationService.sendNotification({
-      type: 'alert',
-      title: 'Live Trading Started',
-      message: 'Automated trading is now active',
-      priority: 'high',
-      timestamp: Date.now(),
-    });
   };
 
   const stopLiveTrading = () => {
     setIsLiveTrading(false);
-    notificationService.sendNotification({
-      type: 'alert',
-      title: 'Live Trading Stopped',
-      message: 'Automated trading has been disabled',
-      priority: 'medium',
-      timestamp: Date.now(),
-    });
   };
 
-  const runBacktest = async () => {
-    setIsBacktesting(true);
+  const handleClosePosition = async (symbol: string) => {
     try {
-      const config: BacktestConfig = {
-        startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
-        endDate: new Date(),
-        initialBalance: 10000,
-        strategy: StrategyRunner.createDefaultStrategy(),
-        riskConfig: riskManager.getRiskConfig(),
-        executorConfig: {
-          paperTrading: true,
-          exchange: 'binance',
-          testnet: true,
-          defaultOrderType: 'market',
-          slippageTolerance: 0.1,
-          maxOrderSize: 1000,
-          enableStopLoss: true,
-          enableTakeProfit: true,
-        },
-        replaySpeed: 100,
-        commission: 0.001,
-        slippage: 0.001,
-      };
-
-      const backtester = new Backtester(config);
+      const position = positions.find(p => p.symbol === symbol);
+      if (!position) {
+        setError(`Position not found for ${symbol}`);
+        return;
+      }
       
-      // Generate sample data for demo
-      const sampleData: CandleData[] = [];
-      const basePrice = 45000;
-      for (let i = 0; i < 1000; i++) {
-        const timestamp = config.startDate.getTime() + (i * 15 * 60 * 1000);
-        const price = basePrice + (Math.random() - 0.5) * 1000;
-        sampleData.push({
-          timestamp,
-          open: price,
-          high: price * 1.01,
-          low: price * 0.99,
-          close: price,
-          volume: 100 + Math.random() * 1000,
-        });
+      // Create a signal for closing the position
+      const closeSignal: StrategySignal = {
+        type: position.side === 'long' ? 'SHORT' : 'LONG', // Opposite direction to close
+        strength: 'STRONG',
+        confidence: 1,
+        price: position.currentPrice,
+        timestamp: Date.now(),
+        reasoning: ['Manual position close'],
+        indicators: [],
+        metadata: {
+          symbol: position.symbol,
+          timeframe,
+          entryConditions: ['Manual close'],
+          exitConditions: ['Manual close']
+        }
+      };
+      
+      // Execute order to close position
+      const orderIntent = {
+        id: `close_${Date.now()}`,
+        signal: closeSignal,
+        symbol: position.symbol,
+        side: position.side === 'long' ? 'sell' : 'buy' as 'buy' | 'sell',
+        amount: position.amount,
+        price: position.currentPrice,
+        timestamp: Date.now()
+      };
+      
+      await orderExecutor.executeOrder(orderIntent);
+      setError(null);
+    } catch (error) {
+      console.error('Failed to close position:', error);
+      setError(`Failed to close position: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleManualOrder = async () => {
+    try {
+      if (!marketData) {
+        setError("Cannot execute trade: No market data available");
+        return;
       }
 
-      backtester.loadData(sampleData);
-      const result = await backtester.startBacktest();
-      setBacktestResult(result);
-      setShowBacktest(true);
-
+      setIsExecutingOrder(true);
+      
+      // Create a signal for manual order
+      const manualSignal: StrategySignal = {
+        type: manualOrderSide === 'buy' ? 'LONG' : 'SHORT',
+        strength: 'STRONG',
+        confidence: 1,
+        price: marketData.price,
+        timestamp: Date.now(),
+        reasoning: ['Manual order execution'],
+        indicators: [],
+        metadata: {
+          symbol,
+          timeframe,
+          entryConditions: ['Manual entry'],
+          exitConditions: []
+        }
+      };
+      
+      // Execute order
+      const orderIntent = {
+        id: `manual_${Date.now()}`,
+        signal: manualSignal,
+        symbol,
+        side: manualOrderSide,
+        amount: manualOrderAmount,
+        price: marketData.price,
+        timestamp: Date.now()
+      };
+      
+      const order = await orderExecutor.executeOrder(orderIntent);
+      console.log('Manual order executed:', order);
+      
+      // Record trade metrics
+      recordTrade({
+        id: order.id,
+        symbol: order.intent.symbol,
+        timeframe,
+        signal: {
+          signal: manualOrderSide,
+          ticker: symbol,
+          timeframe,
+          entry_price: marketData.price,
+          stop_loss: marketData.price * (manualOrderSide === 'buy' ? 0.98 : 1.02),
+          take_profit: marketData.price * (manualOrderSide === 'buy' ? 1.02 : 0.98),
+          confidence: 1,
+          timestamp: Date.now(),
+          indicators: {} as any,
+          reasoning: ['Manual order']
+        },
+        status: 'open',
+        entry_time: Date.now(),
+        size: order.executedAmount * order.executedPrice
+      });
+      
+      setError(null);
     } catch (error) {
-      console.error('Backtest failed:', error);
+      console.error('Failed to execute manual order:', error);
+      setError(`Failed to execute manual order: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      setIsBacktesting(false);
+      setIsExecutingOrder(false);
     }
   };
 
@@ -260,14 +373,6 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
             >
               <Settings size={16} className="mr-2" />
               Settings
-            </button>
-            <button
-              onClick={runBacktest}
-              disabled={isBacktesting}
-              className="flex items-center px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg text-white transition-colors"
-            >
-              <TestTube size={16} className="mr-2" />
-              {isBacktesting ? 'Running...' : 'Backtest'}
             </button>
           </div>
         </div>
@@ -303,8 +408,77 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
           <div className="text-sm text-gray-400">
             Timeframe: <span className="text-white font-mono">{timeframe}</span>
           </div>
+          
+          <button
+            onClick={() => setShowTradingBot(!showTradingBot)}
+            className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors ml-auto"
+          >
+            <Zap size={16} className="mr-2" />
+            {showTradingBot ? 'Hide Trading Bot' : 'Show Trading Bot'}
+          </button>
         </div>
+        
+        {/* Manual Order Form */}
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <h3 className="text-lg font-semibold text-white mb-3">Manual Order Execution</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm text-gray-300 mb-1">Amount ({symbol.split('/')[0]})</label>
+              <input
+                type="number"
+                step="0.001"
+                min="0.001"
+                value={manualOrderAmount}
+                onChange={(e) => setManualOrderAmount(parseFloat(e.target.value))}
+                className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-300 mb-1">Side</label>
+              <select
+                value={manualOrderSide}
+                onChange={(e) => setManualOrderSide(e.target.value as 'buy' | 'sell')}
+                className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
+              >
+                <option value="buy">Buy</option>
+                <option value="sell">Sell</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-300 mb-1">Market Price</label>
+              <div className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600">
+                {marketData ? `$${marketData.price.toLocaleString()}` : 'Loading...'}
+              </div>
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleManualOrder}
+                disabled={isExecutingOrder || !marketData}
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg text-white transition-colors"
+              >
+                {isExecutingOrder ? 'Executing...' : 'Execute Order'}
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {error && (
+          <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-start">
+            <AlertTriangle className="text-red-400 mt-0.5 mr-3 flex-shrink-0" size={18} />
+            <span className="text-red-300 text-sm">{error}</span>
+          </div>
+        )}
       </div>
+
+      {/* Trading Bot */}
+      {showTradingBot && (
+        <TradingBot 
+          initialConfig={tradingBotConfig}
+          onSignalProcessed={(signal, order) => {
+            console.log('Signal processed:', signal, 'Order:', order);
+          }}
+        />
+      )}
 
       {/* Dashboard Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -319,10 +493,76 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
           
           <OpenPositionsTable 
             positions={positions}
-            onClosePosition={(symbol) => {
-              console.log('Close position for:', symbol);
-            }}
+            onClosePosition={handleClosePosition}
           />
+          
+          {/* Orders Table */}
+          <div className="bg-gray-800 rounded-lg border border-gray-700">
+            <div className="p-4 border-b border-gray-700">
+              <h3 className="text-lg font-semibold text-white">Recent Orders</h3>
+              <div className="text-sm text-gray-400 mt-1">
+                {orders.length} order{orders.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto">
+              {orders.length === 0 ? (
+                <div className="text-center text-gray-400 py-8">
+                  <div className="text-lg mb-2">No Orders</div>
+                  <div className="text-sm">Your orders will appear here</div>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="text-left p-4 text-gray-400 font-medium">Symbol</th>
+                      <th className="text-left p-4 text-gray-400 font-medium">Side</th>
+                      <th className="text-right p-4 text-gray-400 font-medium">Amount</th>
+                      <th className="text-right p-4 text-gray-400 font-medium">Price</th>
+                      <th className="text-center p-4 text-gray-400 font-medium">Status</th>
+                      <th className="text-right p-4 text-gray-400 font-medium">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.slice(0, 5).map((order) => (
+                      <tr key={order.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                        <td className="p-4">
+                          <div className="text-white font-medium">{order.intent.symbol}</div>
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            order.intent.side === 'buy' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
+                          }`}>
+                            {order.intent.side.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="text-white font-mono">{order.executedAmount.toFixed(4)}</div>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="text-white font-mono">${order.executedPrice.toFixed(2)}</div>
+                        </td>
+                        <td className="p-4 text-center">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            order.status === 'filled' ? 'bg-green-600/20 text-green-400' :
+                            order.status === 'rejected' ? 'bg-red-600/20 text-red-400' :
+                            'bg-yellow-600/20 text-yellow-400'
+                          }`}>
+                            {order.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="text-gray-400 text-sm">
+                            {new Date(order.timestamp).toLocaleTimeString()}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Signal Log */}
@@ -331,108 +571,41 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         </div>
       </div>
 
-      {/* Backtest Results Modal */}
-      {showBacktest && backtestResult && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">Backtest Results</h2>
-              <button
-                onClick={() => setShowBacktest(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-gray-700/50 rounded-lg p-3">
-                <div className="text-gray-400 text-sm">Total Return</div>
-                <div className={`text-lg font-bold ${backtestResult.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {backtestResult.totalReturn >= 0 ? '+' : ''}${backtestResult.totalReturn.toFixed(2)}
-                </div>
-                <div className="text-xs text-gray-400">
-                  {backtestResult.totalReturnPercent.toFixed(2)}%
-                </div>
-              </div>
-
-              <div className="bg-gray-700/50 rounded-lg p-3">
-                <div className="text-gray-400 text-sm">Sharpe Ratio</div>
-                <div className="text-lg font-bold text-white">
-                  {backtestResult.sharpeRatio.toFixed(2)}
-                </div>
-              </div>
-
-              <div className="bg-gray-700/50 rounded-lg p-3">
-                <div className="text-gray-400 text-sm">Max Drawdown</div>
-                <div className="text-lg font-bold text-red-400">
-                  -{backtestResult.maxDrawdownPercent.toFixed(2)}%
-                </div>
-              </div>
-
-              <div className="bg-gray-700/50 rounded-lg p-3">
-                <div className="text-gray-400 text-sm">Win Rate</div>
-                <div className="text-lg font-bold text-white">
-                  {backtestResult.winRate.toFixed(1)}%
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-white font-medium mb-2">Trade Statistics</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Total Trades:</span>
-                    <span className="text-white">{backtestResult.totalTrades}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Winning Trades:</span>
-                    <span className="text-green-400">{backtestResult.winningTrades}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Losing Trades:</span>
-                    <span className="text-red-400">{backtestResult.losingTrades}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Profit Factor:</span>
-                    <span className="text-white">{backtestResult.profitFactor.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-white font-medium mb-2">Risk Metrics</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Calmar Ratio:</span>
-                    <span className="text-white">{backtestResult.calmarRatio.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Sortino Ratio:</span>
-                    <span className="text-white">{backtestResult.sortinoRatio.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Time in Market:</span>
-                    <span className="text-white">{backtestResult.timeInMarket.toFixed(1)}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Settings Panel */}
       <SettingsPanel
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         onSave={(settings) => {
-          notificationService.updateConfig(
-            settings.email,
-            settings.telegram,
-            settings.webhook
-          );
+          console.log('Settings saved:', settings);
+          setShowSettings(false);
+        }}
+        initialSettings={{
+          email: {
+            enabled: false,
+            address: '',
+            signals: true,
+            trades: true,
+            alerts: true,
+          },
+          telegram: {
+            enabled: false,
+            botToken: '',
+            chatId: '',
+            signals: true,
+            trades: true,
+            alerts: true,
+          },
+          webhook: {
+            enabled: false,
+            url: '',
+            signals: true,
+            trades: true,
+            alerts: true,
+          },
+          sound: {
+            enabled: true,
+            volume: 50,
+          },
         }}
       />
     </div>
