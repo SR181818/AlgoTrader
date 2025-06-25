@@ -9,9 +9,7 @@ import { AlgodClient, Indexer } from 'algosdk';
  */
 export enum SubscriptionTier {
   FREE = 'free',
-  BASIC = 'basic',
-  PRO = 'pro',
-  ENTERPRISE = 'enterprise'
+  AI = 'ai',
 }
 
 /**
@@ -31,9 +29,7 @@ export interface Subscription {
  */
 export const SUBSCRIPTION_PRICES = {
   [SubscriptionTier.FREE]: 0,
-  [SubscriptionTier.BASIC]: 5_000_000, // 5 Algos
-  [SubscriptionTier.PRO]: 20_000_000,  // 20 Algos
-  [SubscriptionTier.ENTERPRISE]: 100_000_000 // 100 Algos
+  [SubscriptionTier.AI]: 10_000_000, // 10 Algos (example)
 };
 
 /**
@@ -41,9 +37,7 @@ export const SUBSCRIPTION_PRICES = {
  */
 export const SUBSCRIPTION_DURATIONS = {
   [SubscriptionTier.FREE]: 0,
-  [SubscriptionTier.BASIC]: 30,
-  [SubscriptionTier.PRO]: 30,
-  [SubscriptionTier.ENTERPRISE]: 30
+  [SubscriptionTier.AI]: 30,
 };
 
 /**
@@ -52,33 +46,17 @@ export const SUBSCRIPTION_DURATIONS = {
 export const SUBSCRIPTION_FEATURES = {
   [SubscriptionTier.FREE]: [
     'Basic market data',
-    'Limited technical indicators',
-    'Single timeframe analysis',
-    'Paper trading'
+    'Paper trading',
+    'Manual order execution',
+    'All trading features (no AI)',
   ],
-  [SubscriptionTier.BASIC]: [
+  [SubscriptionTier.AI]: [
     'All FREE features',
-    'Real-time market data',
-    'Full technical indicator library',
-    'Multi-timeframe analysis',
-    'Basic backtesting'
-  ],
-  [SubscriptionTier.PRO]: [
-    'All BASIC features',
-    'Advanced backtesting',
-    'Custom strategy builder',
+    'AI-powered signals',
     'ML model integration',
-    'Portfolio management',
-    'Risk management tools'
-  ],
-  [SubscriptionTier.ENTERPRISE]: [
-    'All PRO features',
-    'API access',
-    'Custom indicators',
+    'Advanced analytics',
     'Priority support',
-    'Multiple portfolios',
-    'Team collaboration'
-  ]
+  ],
 };
 
 /**

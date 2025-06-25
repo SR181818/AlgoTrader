@@ -5,7 +5,7 @@ import { User, Lock, Shield, CheckCircle } from 'lucide-react';
 export function PremiumLogin() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [tier, setTier] = useState<'pro' | 'enterprise'>('pro');
+  const [tier, setTier] = useState<'free' | 'ai'>('free');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -106,54 +106,21 @@ export function PremiumLogin() {
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Select Subscription Tier
               </label>
-              <div className="grid grid-cols-2 gap-4">
-                <div
-                  className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                    tier === 'pro' 
-                      ? 'border-purple-500 bg-purple-900/20' 
-                      : 'border-gray-600 bg-gray-700/50 hover:bg-gray-700'
-                  }`}
-                  onClick={() => setTier('pro')}
+              <div className="flex space-x-4 mt-4">
+                <button
+                  type="button"
+                  className={`px-4 py-2 rounded-lg font-semibold border ${tier === 'free' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'} transition`}
+                  onClick={() => setTier('free')}
                 >
-                  <div className="flex items-center mb-2">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                      tier === 'pro' ? 'bg-purple-500' : 'bg-gray-600'
-                    }`}>
-                      {tier === 'pro' && <CheckCircle size={12} />}
-                    </div>
-                    <span className="ml-2 font-medium text-white">Pro</span>
-                  </div>
-                  <ul className="text-xs text-gray-300 space-y-1">
-                    <li>• Advanced backtesting</li>
-                    <li>• Custom strategy builder</li>
-                    <li>• ML model integration</li>
-                    <li>• Portfolio management</li>
-                  </ul>
-                </div>
-                
-                <div
-                  className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                    tier === 'enterprise' 
-                      ? 'border-yellow-500 bg-yellow-900/20' 
-                      : 'border-gray-600 bg-gray-700/50 hover:bg-gray-700'
-                  }`}
-                  onClick={() => setTier('enterprise')}
+                  Free Plan
+                </button>
+                <button
+                  type="button"
+                  className={`px-4 py-2 rounded-lg font-semibold border ${tier === 'ai' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'} transition`}
+                  onClick={() => setTier('ai')}
                 >
-                  <div className="flex items-center mb-2">
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
-                      tier === 'enterprise' ? 'bg-yellow-500' : 'bg-gray-600'
-                    }`}>
-                      {tier === 'enterprise' && <CheckCircle size={12} />}
-                    </div>
-                    <span className="ml-2 font-medium text-white">Enterprise</span>
-                  </div>
-                  <ul className="text-xs text-gray-300 space-y-1">
-                    <li>• All Pro features</li>
-                    <li>• API access</li>
-                    <li>• Custom indicators</li>
-                    <li>• Priority support</li>
-                  </ul>
-                </div>
+                  AI Plan
+                </button>
               </div>
             </div>
           </div>

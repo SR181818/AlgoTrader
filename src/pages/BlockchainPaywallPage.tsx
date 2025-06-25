@@ -15,7 +15,7 @@ export default function BlockchainPaywallPage({ onSubscriptionChange }: Blockcha
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [identity, setIdentity] = useState<UserIdentity | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>(SubscriptionTier.BASIC);
+  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>(SubscriptionTier.FREE);
 
   const handleSubscriptionChange = (newSubscription: Subscription | null) => {
     setSubscription(newSubscription);
@@ -103,52 +103,24 @@ export default function BlockchainPaywallPage({ onSubscriptionChange }: Blockcha
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
             <h2 className="text-xl font-semibold text-white mb-4">Subscription Plans</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {Object.values(SubscriptionTier).map((tier) => (
-                <div key={tier} className={`bg-gray-700/50 rounded-lg p-4 border ${
-                  subscription?.tier === tier && subscription?.active 
-                    ? 'border-blue-500' 
-                    : 'border-gray-600'
-                }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-white font-medium">{tier.toUpperCase()}</h3>
-                    <div className={`px-2 py-1 rounded text-xs font-medium ${
-                      tier === SubscriptionTier.FREE ? 'bg-gray-600 text-gray-300' :
-                      tier === SubscriptionTier.BASIC ? 'bg-blue-600/20 text-blue-400' :
-                      tier === SubscriptionTier.PRO ? 'bg-purple-600/20 text-purple-400' :
-                      'bg-yellow-600/20 text-yellow-400'
-                    }`}>
-                      {tier === SubscriptionTier.FREE ? 'FREE' : 
-                       `${SUBSCRIPTION_PRICES[tier] / 1_000_000} ALGO`}
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+              {[SubscriptionTier.FREE, SubscriptionTier.AI].map(tier => (
+                <div key={tier} className="bg-gray-800 rounded-xl p-6 border border-gray-700 flex flex-col items-center">
+                  <h3 className="text-xl font-bold text-white mb-2">{tier === SubscriptionTier.FREE ? 'Free Plan' : 'AI Plan'}</h3>
+                  <div className="text-3xl font-bold text-blue-400 mb-2">
+                    {tier === SubscriptionTier.FREE ? 'Free' : `${SUBSCRIPTION_PRICES[tier] / 1_000_000} Algos/mo`}
                   </div>
-                  
-                  <div className="space-y-2 mt-3">
-                    {SUBSCRIPTION_FEATURES[tier].map((feature, index) => (
-                      <div key={index} className="flex items-start text-sm">
-                        <CheckCircle size={14} className="text-green-400 mt-1 mr-2 flex-shrink-0" />
-                        <span className="text-gray-300">{feature}</span>
-                      </div>
+                  <ul className="text-gray-300 mb-4">
+                    {SUBSCRIPTION_FEATURES[tier].map(f => (
+                      <li key={f} className="flex items-center"><CheckCircle className="w-4 h-4 mr-2 text-green-400" /> {f}</li>
                     ))}
-                  </div>
-                  
-                  {subscription?.tier === tier && subscription?.active ? (
-                    <div className="mt-3 pt-3 border-t border-gray-600 flex items-center text-green-400 text-sm">
-                      <Shield size={14} className="mr-2" />
-                      Current Plan
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleSubscribeClick(tier)}
-                      className={`mt-3 w-full py-2 rounded-lg text-sm font-medium ${
-                        tier === SubscriptionTier.FREE 
-                          ? 'bg-gray-600 hover:bg-gray-500 text-white' 
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
-                      }`}
-                    >
-                      {tier === SubscriptionTier.FREE ? 'Activate Free Plan' : 'Subscribe'}
-                    </button>
-                  )}
+                  </ul>
+                  <button
+                    className="px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold mt-auto"
+                    onClick={() => handleSubscribeClick(tier)}
+                  >
+                    {tier === SubscriptionTier.FREE ? 'Activate Free' : 'Subscribe to AI'}
+                  </button>
                 </div>
               ))}
             </div>

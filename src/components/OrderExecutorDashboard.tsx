@@ -322,6 +322,57 @@ export function OrderExecutorDashboard({ config, onOrderExecuted }: OrderExecuto
         </div>
       </div>
 
+      {/* Open Positions */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700">
+        <div className="p-4 border-b border-gray-700">
+          <h3 className="text-lg font-semibold text-white">Open Positions</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-700">
+                <th className="text-left p-4 text-gray-400 font-medium">Symbol</th>
+                <th className="text-left p-4 text-gray-400 font-medium">Side</th>
+                <th className="text-right p-4 text-gray-400 font-medium">Amount</th>
+                <th className="text-right p-4 text-gray-400 font-medium">Entry Price</th>
+                <th className="text-right p-4 text-gray-400 font-medium">Current Price</th>
+                <th className="text-right p-4 text-gray-400 font-medium">Unrealized PnL</th>
+              </tr>
+            </thead>
+            <tbody>
+              {openPositions.map(pos => (
+                <tr key={pos.symbol + pos.side} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                  <td className="p-4">
+                    <div className="text-white font-medium">{pos.symbol}</div>
+                  </td>
+                  <td className="p-4">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      pos.side === 'buy' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
+                    }`}>
+                      {pos.side.toUpperCase()}
+                    </span>
+                  </td>
+                  <td className="p-4 text-right">
+                    <div className="text-white font-mono">{pos.amount.toFixed(6)}</div>
+                  </td>
+                  <td className="p-4 text-right">
+                    <div className="text-white font-mono">{pos.entryPrice.toFixed(2)}</div>
+                  </td>
+                  <td className="p-4 text-right">
+                    <div className="text-blue-400 font-mono">{pos.currentPrice.toFixed(2)}</div>
+                  </td>
+                  <td className="p-4 text-right">
+                    <div className="text-white font-mono" style={{color: pos.unrealizedPnL >= 0 ? 'green' : 'red'}}>
+                      {pos.unrealizedPnL.toFixed(2)}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Error Log */}
       {errors.length > 0 && (
         <div className="bg-gray-800 rounded-lg border border-gray-700">
