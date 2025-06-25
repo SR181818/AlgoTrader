@@ -23,7 +23,9 @@ export function SubscriptionModal({ tier, onClose, onSubscribe }: SubscriptionMo
   };
   
   const formatTierName = (tier: SubscriptionTier) => {
-    return tier.charAt(0).toUpperCase() + tier.slice(1);
+    if (tier === SubscriptionTier.FREE) return 'Free';
+    if (tier === SubscriptionTier.AI) return 'AI';
+    return '';
   };
   
   const handleProceedToPayment = () => {

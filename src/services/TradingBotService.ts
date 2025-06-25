@@ -1,7 +1,8 @@
 import ccxt from 'ccxt';
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
-import { StrategySignal } from '../trading/StrategyRunner';
+import { StrategyRunner, StrategyConfig, StrategySignal } from '../trading/StrategyRunner';
 import { OrderExecutor, Order, Position, Balance } from '../trading/OrderExecutor';
+import { CandleData } from '../types/trading';
 
 export interface TradingBotConfig {
   exchange: 'binance' | 'kucoin' | 'bybit' | 'okx';
@@ -54,8 +55,22 @@ export class TradingBotService {
   private signalSubject = new Subject<StrategySignal>();
   private orderSubject = new Subject<Order>();
   
-  constructor(config: TradingBotConfig) {
+  private strategyRunner: StrategyRunner | null = null;
+  private strategyConfig: StrategyConfig | null = null;
+  private candleBuffer: CandleData[] = [];
+  
+  constructor(config: TradingBotConfig, strategyConfig?: StrategyConfig) {
     this.config = config;
+    if (strategyConfig) {
+      this.strategyConfig = strategyConfig;
+      this.strategyRunner = new StrategyRunner(strategyConfig);
+      // Subscribe to auto-generated signals
+      this.strategyRunner.getStrategySignals().subscribe(signal => {
+        if (signal.type !== 'HOLD') {
+          this.processSignal(signal);
+        }
+      });
+    }
     
     // Initialize order executor for trade execution
     this.orderExecutor = new OrderExecutor({
@@ -414,6 +429,37 @@ export class TradingBotService {
   updateConfig(config: Partial<TradingBotConfig>): void {
     this.config = { ...this.config, ...config };
     this.updateStatus();
+  }
+  
+  /**
+   * Feed live candle data to the strategy runner
+   */
+  updateCandle(candle: CandleData): void {
+    if (this.strategyRunner) {
+      this.strategyRunner.updateCandle(candle);
+    } else {
+      this.candleBuffer.push(candle);
+    }
+  }
+  
+  /**
+   * Set or update the trading strategy
+   */
+  setStrategy(strategy: StrategyConfig): void {
+    this.strategyConfig = strategy;
+    if (!this.strategyRunner) {
+      this.strategyRunner = new StrategyRunner(strategy);
+      this.strategyRunner.getStrategySignals().subscribe(signal => {
+        if (signal.type !== 'HOLD') {
+          this.processSignal(signal);
+        }
+      });
+      // Feed any buffered candles
+      this.candleBuffer.forEach(c => this.strategyRunner!.updateCandle(c));
+      this.candleBuffer = [];
+    } else {
+      this.strategyRunner.setStrategy(strategy);
+    }
   }
   
   /**

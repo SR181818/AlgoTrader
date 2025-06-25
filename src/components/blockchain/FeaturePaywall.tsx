@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { AlgorandPaywall, SubscriptionTier, Subscription, SUBSCRIPTION_FEATURES } from '../../blockchain/AlgorandPaywall';
-import { Lock, Unlock, CreditCard, CheckCircle } from 'lucide-react';
+import { AlgorandPaywall } from '../../blockchain/AlgorandPaywall';
+import { Lock, CreditCard } from 'lucide-react';
 
 interface FeaturePaywallProps {
   featureName: string;
@@ -17,21 +17,17 @@ export function FeaturePaywall({
 }: FeaturePaywallProps) {
   const [paywall] = useState(() => new AlgorandPaywall());
   const [isAvailable, setIsAvailable] = useState(false);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   // Initialize on mount
   useEffect(() => {
     const checkFeatureAvailability = () => {
-      const currentSubscription = paywall.getCurrentSubscription();
-      setSubscription(currentSubscription);
       setIsAvailable(paywall.isFeatureAvailable(featureName));
       setIsLoading(false);
     };
 
     // Set up subscription change listener
-    paywall.onSubscriptionChange((newSubscription) => {
-      setSubscription(newSubscription);
+    paywall.onSubscriptionChange(() => {
       setIsAvailable(paywall.isFeatureAvailable(featureName));
     });
 
@@ -71,7 +67,7 @@ export function FeaturePaywall({
         <h3 className="text-white font-medium mb-2">Premium Feature</h3>
         
         <p className="text-gray-400 text-sm mb-4">
-          This feature requires a {getRequiredTier(featureName)} subscription or higher.
+          This feature requires an AI subscription.
         </p>
         
         <button
@@ -84,27 +80,4 @@ export function FeaturePaywall({
       </div>
     </div>
   );
-}
-
-// Helper function to determine required tier for a feature
-function getRequiredTier(featureName: string): string {
-  // This would be based on your feature configuration
-  const featureTiers: Record<string, string> = {
-    'Real-time market data': 'BASIC',
-    'Full technical indicator library': 'BASIC',
-    'Multi-timeframe analysis': 'BASIC',
-    'Basic backtesting': 'BASIC',
-    'Advanced backtesting': 'PRO',
-    'Custom strategy builder': 'PRO',
-    'ML model integration': 'PRO',
-    'Portfolio management': 'PRO',
-    'Risk management tools': 'PRO',
-    'API access': 'ENTERPRISE',
-    'Custom indicators': 'ENTERPRISE',
-    'Priority support': 'ENTERPRISE',
-    'Multiple portfolios': 'ENTERPRISE',
-    'Team collaboration': 'ENTERPRISE'
-  };
-  
-  return featureTiers[featureName] || 'BASIC';
 }

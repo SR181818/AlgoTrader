@@ -5,7 +5,7 @@ import { FeaturePaywall } from '../components/blockchain/FeaturePaywall';
 import { SubscriptionModal } from '../components/blockchain/SubscriptionModal';
 import { Subscription, SubscriptionTier, SUBSCRIPTION_FEATURES, SUBSCRIPTION_PRICES } from '../blockchain/AlgorandPaywall';
 import { UserIdentity } from '../blockchain/AlgorandIdentity';
-import { Wallet, Shield, CreditCard, Lock, Unlock, Bot, BarChart3, Activity, CheckCircle, User } from 'lucide-react';
+import { Wallet, Shield, CreditCard, Lock, Unlock, Bot, CheckCircle, User } from 'lucide-react';
 
 interface BlockchainPaywallPageProps {
   onSubscriptionChange?: (subscription: Subscription | null) => void;
@@ -75,9 +75,7 @@ export default function BlockchainPaywallPage({ onSubscriptionChange }: Blockcha
           {subscription && subscription.active && (
             <div className={`flex items-center rounded-lg px-3 py-1 ${
               subscription.tier === 'free' ? 'bg-gray-800 border border-gray-700 text-gray-300' :
-              subscription.tier === 'basic' ? 'bg-blue-600/20 border border-blue-600/30 text-blue-400' :
-              subscription.tier === 'pro' ? 'bg-purple-600/20 border border-purple-600/30 text-purple-400' :
-              'bg-yellow-600/20 border border-yellow-600/30 text-yellow-400'
+              'bg-blue-600/20 border border-blue-600/30 text-blue-400'
             }`}>
               <Shield size={16} className="mr-2" />
               <span className="text-sm font-medium">{subscription.tier.toUpperCase()}</span>
@@ -98,7 +96,7 @@ export default function BlockchainPaywallPage({ onSubscriptionChange }: Blockcha
           />
         </div>
         
-        {/* Right Column - Premium Features */}
+        {/* Right Column - Subscription Plans and Features */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
             <h2 className="text-xl font-semibold text-white mb-4">Subscription Plans</h2>
@@ -133,7 +131,7 @@ export default function BlockchainPaywallPage({ onSubscriptionChange }: Blockcha
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Basic Feature - Available to all */}
+              {/* Free features */}
               <div className="bg-gray-700/50 rounded-lg p-4">
                 <div className="flex items-center mb-3">
                   <div className="p-2 bg-green-600/20 rounded-lg mr-3">
@@ -149,65 +147,23 @@ export default function BlockchainPaywallPage({ onSubscriptionChange }: Blockcha
                 </p>
               </div>
               
-              {/* Basic Tier Feature */}
+              {/* AI features */}
               <FeaturePaywall
-                featureName="Full technical indicator library"
-                onSubscribe={() => handleSubscribeClick(SubscriptionTier.BASIC)}
+                featureName="AI-powered signals"
+                onSubscribe={() => handleSubscribeClick(SubscriptionTier.AI)}
               >
                 <div className="bg-gray-700/50 rounded-lg p-4">
                   <div className="flex items-center mb-3">
                     <div className="p-2 bg-blue-600/20 rounded-lg mr-3">
-                      <Activity size={18} className="text-blue-400" />
+                      <Bot size={18} className="text-blue-400" />
                     </div>
                     <div>
-                      <h3 className="text-white font-medium">Technical Indicators</h3>
-                      <p className="text-xs text-blue-400">BASIC Plan Feature</p>
+                      <h3 className="text-white font-medium">AI-Powered Signals</h3>
+                      <p className="text-xs text-blue-400">AI Plan Feature</p>
                     </div>
                   </div>
                   <p className="text-sm text-gray-300">
-                    Access the full library of technical indicators and analysis tools.
-                  </p>
-                </div>
-              </FeaturePaywall>
-              
-              {/* Pro Tier Feature */}
-              <FeaturePaywall
-                featureName="Advanced backtesting"
-                onSubscribe={() => handleSubscribeClick(SubscriptionTier.PRO)}
-              >
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="flex items-center mb-3">
-                    <div className="p-2 bg-purple-600/20 rounded-lg mr-3">
-                      <BarChart3 size={18} className="text-purple-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-white font-medium">Advanced Backtesting</h3>
-                      <p className="text-xs text-purple-400">PRO Plan Feature</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-300">
-                    Test your strategies against historical data with advanced metrics and analysis.
-                  </p>
-                </div>
-              </FeaturePaywall>
-              
-              {/* Enterprise Tier Feature */}
-              <FeaturePaywall
-                featureName="Custom indicators"
-                onSubscribe={() => handleSubscribeClick(SubscriptionTier.ENTERPRISE)}
-              >
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="flex items-center mb-3">
-                    <div className="p-2 bg-yellow-600/20 rounded-lg mr-3">
-                      <Bot size={18} className="text-yellow-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-white font-medium">Custom Indicators</h3>
-                      <p className="text-xs text-yellow-400">ENTERPRISE Plan Feature</p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-gray-300">
-                    Create and deploy your own custom technical indicators.
+                    Unlock advanced AI-powered trading signals and analytics.
                   </p>
                 </div>
               </FeaturePaywall>

@@ -110,9 +110,7 @@ export function AlgorandWalletConnect({
         {accounts.length > 0 && subscription && (
           <div className={`px-2 py-1 rounded text-xs font-medium ${
             subscription.tier === SubscriptionTier.FREE ? 'bg-gray-600 text-gray-300' :
-            subscription.tier === SubscriptionTier.BASIC ? 'bg-blue-600/20 text-blue-400' :
-            subscription.tier === SubscriptionTier.PRO ? 'bg-purple-600/20 text-purple-400' :
-            'bg-yellow-600/20 text-yellow-400'
+            'bg-blue-600/20 text-blue-400'
           }`}>
             {subscription.tier.toUpperCase()} PLAN
           </div>
@@ -161,7 +159,7 @@ export function AlgorandWalletConnect({
             </div>
             
             <a
-              href={`https://${paywall.config.network === 'mainnet' ? '' : paywall.config.network + '.'}algoexplorer.io/address/${accounts[0]}`}
+              href={`https://algoexplorer.io/address/${accounts[0]}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-blue-400 hover:text-blue-300 transition-colors"
@@ -262,12 +260,9 @@ export function AlgorandWalletConnect({
                       <div className="text-white font-medium">{tier.toUpperCase()} Plan</div>
                       <div className={`px-2 py-1 rounded text-xs font-medium ${
                         tier === SubscriptionTier.FREE ? 'bg-gray-600 text-gray-300' :
-                        tier === SubscriptionTier.BASIC ? 'bg-blue-600/20 text-blue-400' :
-                        tier === SubscriptionTier.PRO ? 'bg-purple-600/20 text-purple-400' :
-                        'bg-yellow-600/20 text-yellow-400'
+                        'bg-blue-600/20 text-blue-400'
                       }`}>
-                        {tier === SubscriptionTier.FREE ? 'FREE' : 
-                         `${SUBSCRIPTION_PRICES[tier] / 1_000_000} ALGO`}
+                        {tier === SubscriptionTier.FREE ? 'FREE' : `${SUBSCRIPTION_PRICES[tier] / 1_000_000} ALGO`}
                       </div>
                     </div>
                     
