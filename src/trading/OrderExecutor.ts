@@ -2,6 +2,8 @@ import ccxt from 'ccxt';
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { StrategySignal } from './StrategyRunner';
 import Logger from '../utils/logger';
+import ccxtServiceSingleton from '../utils/ccxtServiceSingleton';
+import type { MarketData } from '../types/trading';
 
 export interface OrderIntent {
   id: string;
@@ -96,7 +98,8 @@ export interface ExecutorStats {
 }
 
 export class OrderExecutor {
-  private exchange: ccxt.Exchange | null = null;
+  // @ts-ignore
+  private exchange: any = null;
   private config: ExecutorConfig;
   private orders = new Map<string, Order>();
   private positions = new Map<string, Position>();
@@ -211,7 +214,7 @@ export class OrderExecutor {
   /**
    * Get CCXT exchange class
    */
-  private getExchangeClass(): typeof ccxt.Exchange {
+  private getExchangeClass(): any {
     switch (this.config.exchange) {
       case 'binance':
         return ccxt.binance;
@@ -327,7 +330,7 @@ export class OrderExecutor {
   }
 
   /**
-   * Execute paper trading order
+   * Execute paper trading order (now uses real-time price for entry and PnL)
    */
   private async executePaperOrder(intent: OrderIntent): Promise<Order> {
     const order: Order = {
@@ -344,8 +347,9 @@ export class OrderExecutor {
     };
 
     try {
-      // Simulate market price with slippage
-      const marketPrice = intent.price || this.getSimulatedMarketPrice(intent.symbol);
+      // Fetch real-time price for entry
+      const livePrice = await this.getLiveMarketPrice(intent.symbol);
+      const marketPrice = intent.price || livePrice;
       const slippage = this.config.slippageTolerance / 100;
       const executedPrice = this.config.defaultOrderType === 'market' ?
         (intent.side === 'buy' ? marketPrice * (1 + slippage) : marketPrice * (1 - slippage)) :
@@ -359,10 +363,8 @@ export class OrderExecutor {
       const requiredBalance = intent.side === 'buy' ? 
         intent.amount * executedPrice : 
         intent.amount;
-      
       const currency = intent.side === 'buy' ? quoteCurrency : baseCurrency;
       const availableBalance = this.paperBalance[currency]?.free || 0;
-      
       if (availableBalance < requiredBalance) {
         throw new Error(`Insufficient ${currency} balance. Required: ${requiredBalance}, Available: ${availableBalance}`);
       }
@@ -397,15 +399,12 @@ export class OrderExecutor {
         side: intent.side,
         takerOrMaker: this.config.defaultOrderType === 'market' ? 'taker' : 'maker'
       };
-      
       order.fills = [fill];
 
       // Update paper balance
       this.updatePaperBalance(order);
-      
       // Update position
-      this.updatePositionFromOrder(order);
-      
+      await this.updatePositionFromOrderWithLivePrice(order);
       // Update statistics
       this.updateStatsFromOrder(order);
 
@@ -415,7 +414,6 @@ export class OrderExecutor {
       order.status = 'rejected';
       order.error = error instanceof Error ? error.message : 'Unknown error';
       order.lastUpdate = Date.now();
-      
       this.stats.rejectedOrders++;
       Logger.error('Paper order execution failed:', error);
     }
@@ -791,18 +789,69 @@ export class OrderExecutor {
 
     const position = this.positions.get(symbol);
     if (position) {
-      this.updatePositionPnL(position);
+      // Remove old updatePositionPnL calls (now handled by updatePositionPnLWithLivePrice)
+      // this.updatePositionPnL(position); // <-- removed, now handled by updatePositionPnLWithLivePrice
       this.positionSubject.next(position);
     }
   }
 
   /**
-   * Update position P&L
+   * Update position from order (with live price for PnL)
    */
-  private updatePositionPnL(position: Position): void {
-    const currentPrice = this.getSimulatedMarketPrice(position.symbol);
+  private async updatePositionFromOrderWithLivePrice(order: Order): Promise<void> {
+    const symbol = order.intent.symbol;
+    const positionSide = order.intent.side === 'buy' ? 'long' : 'short';
+    const existingPosition = this.positions.get(symbol);
+    if (existingPosition) {
+      // Update existing position
+      if (existingPosition.side === positionSide) {
+        // Add to position
+        const totalAmount = existingPosition.amount + order.executedAmount;
+        const avgPrice = (existingPosition.entryPrice * existingPosition.amount + 
+                         order.executedPrice * order.executedAmount) / totalAmount;
+        existingPosition.amount = totalAmount;
+        existingPosition.entryPrice = avgPrice;
+      } else {
+        // Reduce or reverse position
+        if (order.executedAmount >= existingPosition.amount) {
+          // Reverse position
+          existingPosition.side = positionSide;
+          existingPosition.amount = order.executedAmount - existingPosition.amount;
+          existingPosition.entryPrice = order.executedPrice;
+        } else {
+          // Reduce position
+          existingPosition.amount -= order.executedAmount;
+        }
+      }
+      existingPosition.lastUpdate = Date.now();
+    } else {
+      // Create new position
+      const newPosition: Position = {
+        symbol,
+        side: positionSide,
+        amount: order.executedAmount,
+        entryPrice: order.executedPrice,
+        currentPrice: order.executedPrice,
+        unrealizedPnL: 0,
+        realizedPnL: 0,
+        timestamp: Date.now(),
+        lastUpdate: Date.now()
+      };
+      this.positions.set(symbol, newPosition);
+    }
+    const position = this.positions.get(symbol);
+    if (position) {
+      await this.updatePositionPnLWithLivePrice(position);
+      this.positionSubject.next(position);
+    }
+  }
+
+  /**
+   * Update position P&L using live price
+   */
+  private async updatePositionPnLWithLivePrice(position: Position): Promise<void> {
+    const currentPrice = await this.getLiveMarketPrice(position.symbol);
     position.currentPrice = currentPrice;
-    
     if (position.side === 'long') {
       position.unrealizedPnL = (currentPrice - position.entryPrice) * position.amount;
     } else {
@@ -911,7 +960,7 @@ export class OrderExecutor {
    * Start price simulation for paper trading
    */
   private startPriceSimulation(): void {
-    this.priceUpdateInterval = setInterval(() => {
+    this.priceUpdateInterval = setInterval(async () => {
       this.marketPrices.forEach((price, symbol) => {
         const volatility = this.getVolatilityForSymbol(symbol);
         const change = (Math.random() - 0.5) * volatility;
@@ -919,11 +968,11 @@ export class OrderExecutor {
         this.marketPrices.set(symbol, newPrice);
       });
 
-      // Update position P&L
-      this.positions.forEach(position => {
-        this.updatePositionPnL(position);
+      // Update position P&L using live price
+      for (const position of this.positions.values()) {
+        await this.updatePositionPnLWithLivePrice(position);
         this.positionSubject.next(position);
-      });
+      }
     }, 1000);
   }
 
@@ -957,6 +1006,19 @@ export class OrderExecutor {
     if (symbol.includes('BTC')) return 0.002; // 0.2%
     if (symbol.includes('ETH')) return 0.0025; // 0.25%
     return 0.003; // 0.3% for altcoins
+  }
+
+  /**
+   * Get real-time market price using ccxtDataService (live for paper/manual)
+   */
+  private async getLiveMarketPrice(symbol: string): Promise<number> {
+    try {
+      const marketData: MarketData = await ccxtServiceSingleton.fetchTicker(symbol);
+      return marketData.price;
+    } catch (e) {
+      Logger.error('Failed to fetch live price from ccxt, falling back to simulation:', e);
+      return this.getSimulatedMarketPrice(symbol);
+    }
   }
 
   /**

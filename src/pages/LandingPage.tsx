@@ -92,10 +92,10 @@ export default function LandingPage() {
                 <ArrowRight size={18} className="ml-2" />
               </Link>
               
-              <Link to="/premium-login" className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors flex items-center justify-center">
+              {/* <Link to="/premium-login" className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors flex items-center justify-center">
                 <Shield size={18} className="mr-2" />
                 Premium Access
-              </Link>
+              </Link> */}
               
               <a href="#features" className="px-8 py-4 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors flex items-center justify-center">
                 Learn More
@@ -162,6 +162,7 @@ export default function LandingPage() {
               highlighted={false}
             />
             
+            {/*
             <PricingCard 
               title="Basic"
               price="$29"
@@ -196,6 +197,7 @@ export default function LandingPage() {
               buttonLink="/premium-login"
               highlighted={false}
             />
+            */}
           </div>
         </div>
       </div>
@@ -221,10 +223,10 @@ export default function LandingPage() {
                 <ArrowRight size={18} className="ml-2" />
               </Link>
               
-              <Link to="/premium-login" className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors flex items-center justify-center">
+              {/* <Link to="/premium-login" className="px-8 py-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors flex items-center justify-center">
                 <Shield size={18} className="mr-2" />
                 Premium Access
-              </Link>
+              </Link> */}
             </div>
           </motion.div>
         </div>
