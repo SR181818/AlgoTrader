@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 export interface NotificationPayload {
   type: 'signal' | 'trade' | 'alert';
   title: string;
@@ -214,5 +216,31 @@ export class NotificationService {
     if (webhookConfig) {
       this.webhookConfig = { ...this.webhookConfig, ...webhookConfig };
     }
+  }
+
+  async sendTelegramAlert(message: string) {
+    if (!this.telegramConfig.enabled) return;
+    const url = `https://api.telegram.org/bot${this.telegramConfig.botToken}/sendMessage`;
+    await axios.post(url, {
+      chat_id: this.telegramConfig.chatId,
+      text: message,
+      parse_mode: 'Markdown',
+    });
+  }
+
+  async sendSMSAlert(message: string) {
+    // Example: Twilio (add config as needed)
+    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_FROM || !process.env.TWILIO_TO) return;
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`;
+    await axios.post(url, new URLSearchParams({
+      From: process.env.TWILIO_FROM,
+      To: process.env.TWILIO_TO,
+      Body: message,
+    }), {
+      auth: {
+        username: process.env.TWILIO_ACCOUNT_SID,
+        password: process.env.TWILIO_AUTH_TOKEN,
+      },
+    });
   }
 }

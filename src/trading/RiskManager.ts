@@ -1,40 +1,11 @@
-export interface RiskConfig {
-  maxRiskPerTrade: number; // Percentage of account balance (e.g., 0.01 for 1%)
-  maxDailyDrawdown: number; // Maximum daily loss percentage
-  maxOpenPositions: number;
-  maxCorrelatedPositions: number; // Max positions in correlated assets
-  minRiskRewardRatio: number;
-  maxLeverage: number;
-  emergencyStopLoss: number; // Account-wide stop loss percentage
-  cooldownPeriod: number; // Minutes to wait after max daily drawdown hit
-}
-
-export interface RiskMetrics {
-  currentDrawdown: number;
-  dailyPnL: number;
-  openPositionsCount: number;
-  totalExposure: number;
-  riskPerTrade: number;
-  accountBalance: number;
-  lastResetTime: number;
-}
-
-export interface PositionSizeCalculation {
-  recommendedSize: number;
-  maxAllowedSize: number;
-  riskAmount: number;
-  reasoning: string[];
-  approved: boolean;
-}
-
-export interface RiskAssessment {
-  approved: boolean;
-  positionSize: PositionSizeCalculation;
-  warnings: string[];
-  restrictions: string[];
-  riskScore: number; // 0-100, higher is riskier
-}
-
+/**
+ * RiskManager enforces risk controls, calculates position sizing, and tracks risk metrics for trading operations.
+ *
+ * @remarks
+ * - Supports max risk per trade, drawdown, leverage, and correlation controls
+ * - Provides position size recommendations and risk assessments
+ * - Tracks and resets daily risk metrics
+ */
 export class RiskManager {
   private config: RiskConfig;
   private metrics: RiskMetrics;

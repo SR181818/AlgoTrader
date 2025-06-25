@@ -1,6 +1,7 @@
 // This file is only used in Node.js environment, not bundled for the browser
 import http from 'node:http';
 import { Registry, Counter, Gauge, Histogram, collectDefaultMetrics } from 'prom-client';
+import { apiLatencyHistogram, ccxtCallDurationHistogram, backtesterRunTimeHistogram } from './prometheusHistograms';
 
 // Create a Registry to register metrics
 const register = new Registry();
@@ -121,6 +122,11 @@ export const strategyExecutionTime = new Histogram({
   buckets: [0.001, 0.01, 0.1, 0.5, 1, 2, 5],
   registers: [register]
 });
+
+// API metrics
+export const apiLatency = apiLatencyHistogram;
+export const ccxtCallDuration = ccxtCallDurationHistogram;
+export const backtesterRunTime = backtesterRunTimeHistogram;
 
 // Data metrics
 export const dataPointsProcessed = new Counter({

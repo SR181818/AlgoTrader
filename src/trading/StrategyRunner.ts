@@ -90,6 +90,14 @@ export interface StrategyPerformance {
   successRate?: number; // If backtesting data available
 }
 
+/**
+ * StrategyRunner orchestrates the execution of trading strategies, manages signals, and maintains context/state.
+ *
+ * @remarks
+ * - Handles indicator and strategy signals
+ * - Maintains context and performance metrics
+ * - Supports rate limiting and history management
+ */
 export class StrategyRunner {
   private candleSubject = new Subject<CandleData>();
   private indicatorSignals = new Map<string, BehaviorSubject<IndicatorSignal>>();

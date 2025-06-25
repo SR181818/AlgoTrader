@@ -21,7 +21,7 @@ import {
   getDefaultParameters,
   TALibIndicatorConfiguration,
 } from '../store/talibIndicatorSlice';
-import { TALibIndicatorConfig } from '../utils/talib-indicators';
+import { TALibIndicatorConfig, runIndicatorInWorker } from '../utils/talib-indicators';
 
 export const useTALibIndicators = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -182,4 +182,12 @@ export const useTALibIndicator = (id: string) => {
     removeIndicator: removeThisIndicator,
     exists: !!indicator,
   };
+};
+
+// Example: Offload calculation to Web Worker
+export const useIndicatorWorker = () => {
+  const calculateIndicator = useCallback(async (indicator: string, input: any) => {
+    return await runIndicatorInWorker(indicator, input);
+  }, []);
+  return { calculateIndicator };
 };

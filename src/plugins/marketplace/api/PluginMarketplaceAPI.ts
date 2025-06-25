@@ -27,9 +27,17 @@ export class PluginMarketplaceAPI {
    */
   
   // GET /api/plugins
-  async getPlugins(req: any): Promise<{ success: boolean; data: Plugin[] }> {
+  /**
+   * Supports offset-based (limit, offset) and cursor-based (after) pagination.
+   * Returns { data, nextCursor, totalCount }
+   */
+  async getPlugins(req: any): Promise<{ success: boolean; data: Plugin[]; nextCursor?: string; totalCount: number }> {
     try {
-      const plugins = await this.pluginService.getPlugins({
+      const { limit, offset, after } = req.query;
+      let plugins: Plugin[] = [];
+      let nextCursor: string | undefined = undefined;
+      let totalCount = await this.pluginService.getPluginCount({
+        // pass all filters except pagination
         category: req.query.category as PluginCategory,
         tags: req.query.tags ? req.query.tags.split(',') : undefined,
         search: req.query.search,
@@ -43,11 +51,37 @@ export class PluginMarketplaceAPI {
         maxPrice: req.query.maxPrice ? parseFloat(req.query.maxPrice) : undefined,
         sortBy: req.query.sortBy as any,
         sortOrder: req.query.sortOrder as any,
-        limit: req.query.limit ? parseInt(req.query.limit) : undefined,
-        offset: req.query.offset ? parseInt(req.query.offset) : undefined,
       });
-      
-      return { success: true, data: plugins };
+      if (after) {
+        // Cursor-based pagination
+        const result = await this.pluginService.getPluginsByCursor({
+          ...req.query,
+          after,
+          limit: limit ? parseInt(limit) : 20,
+        });
+        plugins = result.plugins;
+        nextCursor = result.nextCursor;
+      } else {
+        // Offset-based pagination (default)
+        plugins = await this.pluginService.getPlugins({
+          category: req.query.category as PluginCategory,
+          tags: req.query.tags ? req.query.tags.split(',') : undefined,
+          search: req.query.search,
+          authorId: req.query.authorId,
+          status: req.query.status as PluginStatus,
+          isVerified: req.query.isVerified === 'true' ? true : 
+                     req.query.isVerified === 'false' ? false : undefined,
+          isPublic: req.query.isPublic === 'true' ? true : 
+                   req.query.isPublic === 'false' ? false : undefined,
+          minRating: req.query.minRating ? parseFloat(req.query.minRating) : undefined,
+          maxPrice: req.query.maxPrice ? parseFloat(req.query.maxPrice) : undefined,
+          sortBy: req.query.sortBy as any,
+          sortOrder: req.query.sortOrder as any,
+          limit: limit ? parseInt(limit) : undefined,
+          offset: offset ? parseInt(offset) : undefined,
+        });
+      }
+      return { success: true, data: plugins, nextCursor, totalCount };
     } catch (error) {
       Logger.error('Failed to get plugins:', error, { method: 'getPlugins' });
       throw new Error('Failed to get plugins');

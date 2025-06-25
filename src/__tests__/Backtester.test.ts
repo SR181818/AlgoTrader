@@ -206,4 +206,19 @@ describe('Backtester', () => {
 
     return candles;
   }
+
+  it('should initialize with a config', () => {
+    // TODO: Replace with actual mock config
+    const backtester = new Backtester({});
+    expect(backtester).toBeDefined();
+  });
+
+  it('should run a backtest and return results', async () => {
+    // TODO: Provide mock data and assert backtest results
+    // await backtester.loadData(mockData);
+    // const result = await backtester.startBacktest();
+    // expect(result).toBeDefined();
+  });
+
+  // Add more tests for edge cases, error handling, etc.
 });

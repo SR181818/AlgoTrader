@@ -414,6 +414,45 @@ export class PluginService {
   }
   
   /**
+   * Get total count of plugins matching filters (for pagination)
+   */
+  async getPluginCount(options?: {
+    category?: PluginCategory;
+    tags?: string[];
+    search?: string;
+    authorId?: string;
+    status?: PluginStatus;
+    isVerified?: boolean;
+    isPublic?: boolean;
+    minRating?: number;
+    maxPrice?: number;
+    sortBy?: 'name' | 'rating' | 'downloads' | 'price' | 'created' | 'updated';
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<number> {
+    let filteredPlugins = await this.getPlugins(options);
+    return filteredPlugins.length;
+  }
+
+  /**
+   * Cursor-based pagination for plugins
+   * Returns { plugins, nextCursor }
+   * Cursor is the plugin id of the last item in the previous page
+   */
+  async getPluginsByCursor(options: any): Promise<{ plugins: Plugin[]; nextCursor?: string }> {
+    const limit = options.limit ? parseInt(options.limit) : 20;
+    const after = options.after;
+    let filteredPlugins = await this.getPlugins(options);
+    let startIndex = 0;
+    if (after) {
+      startIndex = filteredPlugins.findIndex((p) => p.id === after) + 1;
+      if (startIndex < 0) startIndex = 0;
+    }
+    const plugins = filteredPlugins.slice(startIndex, startIndex + limit);
+    const nextCursor = plugins.length === limit ? plugins[plugins.length - 1].id : undefined;
+    return { plugins, nextCursor };
+  }
+  
+  /**
    * Update plugin rating based on all ratings
    */
   private updatePluginRating(pluginId: string): void {

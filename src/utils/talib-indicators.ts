@@ -1,6 +1,7 @@
 import * as TI from 'technicalindicators';
 import { CandleData } from '../types/trading';
 import Logger from './logger';
+import { getCached } from '../cache/redisCache';
 
 export interface TALibIndicatorConfig {
   name: string;
@@ -598,4 +599,43 @@ export class TALibCalculator {
   static getIndicatorConfig(name: string): TALibIndicatorConfig | undefined {
     return TALIB_INDICATORS.find(indicator => indicator.name === name);
   }
+}
+
+// Example: Get currency pairs with Redis cache
+export async function getCurrencyPairsCached(): Promise<any[]> {
+  return getCached('currencyPairs', async () => {
+    // Replace with actual data source if needed
+    return [
+      { symbol: 'BTC/USDT', base: 'BTC', quote: 'USDT' },
+      { symbol: 'ETH/USDT', base: 'ETH', quote: 'USDT' },
+      // ...
+    ];
+  }, 86400);
+}
+
+// Example: Get indicator metadata with Redis cache
+export async function getIndicatorMetadataCached(): Promise<any[]> {
+  return getCached('indicatorMetadata', async () => {
+    return TALIB_INDICATORS;
+  }, 86400);
+}
+
+// Utility to run indicator calculation in a Web Worker
+export function runIndicatorInWorker(indicator: string, input: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL('../workers/indicatorWorker.ts', import.meta.url), { type: 'module' });
+    worker.onmessage = (e) => {
+      if (e.data.success) {
+        resolve(e.data.result);
+      } else {
+        reject(new Error(e.data.error));
+      }
+      worker.terminate();
+    };
+    worker.onerror = (err) => {
+      reject(err);
+      worker.terminate();
+    };
+    worker.postMessage({ indicator, input });
+  });
 }

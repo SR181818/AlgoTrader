@@ -208,4 +208,19 @@ describe('StrategyRunner', () => {
       strategyRunner.updateCandle(mockCandle);
     });
   });
+
+  it('should initialize with a strategy', () => {
+    // TODO: Replace with actual mock config
+    const runner = new StrategyRunner({});
+    expect(runner).toBeDefined();
+  });
+
+  it('should generate signals for valid input', () => {
+    // TODO: Provide mock candle data and assert signals
+    // Example:
+    // runner.updateCandle(mockCandle);
+    // expect(runner.getSignals()).toContainEqual(expectedSignal);
+  });
+
+  // Add more tests for edge cases, error handling, etc.
 });

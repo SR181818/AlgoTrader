@@ -1,5 +1,7 @@
 import { PortfolioManager, Account, Portfolio, PortfolioMetrics, PortfolioPosition, PortfolioAllocation, PortfolioRiskLimits } from '../services/PortfolioManager';
 import Logger from '../utils/logger';
+import { validateRequest } from '../middleware/validateRequest';
+import { riskLimitUpdateSchema } from '../middleware/riskLimitUpdateSchema';
 
 // Simulated REST API endpoints for portfolio management
 // In a real application, these would be Express.js routes or similar
@@ -258,6 +260,11 @@ export class PortfolioAPI {
     portfolioId: string,
     updates: Partial<PortfolioRiskLimits>
   ): Promise<{ success: boolean; message: string }> {
+    // Validate risk limit update
+    const parseResult = riskLimitUpdateSchema.safeParse(updates);
+    if (!parseResult.success) {
+      throw new Error('Risk limit update validation failed: ' + JSON.stringify(parseResult.error.errors));
+    }
     try {
       const updated = this.portfolioManager.updatePortfolioRiskLimits(portfolioId, updates);
       return { 

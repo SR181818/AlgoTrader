@@ -27,6 +27,12 @@ describe('RiskManager', () => {
       expect(metrics.dailyPnL).toBe(0);
       expect(metrics.openPositionsCount).toBe(0);
     });
+
+    it('should initialize with a config', () => {
+      // TODO: Replace with actual mock config
+      const manager = new RiskManager({});
+      expect(manager).toBeDefined();
+    });
   });
 
   describe('calculatePositionSize', () => {
@@ -249,4 +255,13 @@ describe('RiskManager', () => {
       expect(metrics).toHaveProperty('lastResetTime');
     });
   });
+
+  it('should calculate risk correctly', () => {
+    // TODO: Provide mock positions and assert risk calculations
+    // Example:
+    // const risk = manager.calculateRisk(mockPositions);
+    // expect(risk).toBe(expectedRisk);
+  });
+
+  // Add more tests for edge cases, error handling, etc.
 });

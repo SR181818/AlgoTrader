@@ -54,6 +54,34 @@ export const storageErrorMiddleware: Middleware<{}, RootState> =
     }
   };
 
+function getLocalStorageSize(): number {
+  let total = 0;
+  for (let key in localStorage) {
+    if (localStorage.hasOwnProperty(key)) {
+      const value = localStorage.getItem(key);
+      if (value) total += value.length;
+    }
+  }
+  return total;
+}
+
+function enforceLocalStorageQuota(maxBytes = 5 * 1024 * 1024) {
+  while (getLocalStorageSize() > maxBytes) {
+    // Remove the oldest entry (by key order)
+    const keys = Object.keys(localStorage);
+    if (keys.length === 0) break;
+    localStorage.removeItem(keys[0]);
+  }
+}
+
+// Before every setItem, enforce quota
+localStorage.setItem = (function (originalSetItem) {
+  return function (key, value) {
+    enforceLocalStorageQuota();
+    return originalSetItem.apply(this, arguments);
+  };
+})(localStorage.setItem);
+
 // Combined persistence middleware
 export const persistenceMiddleware = [
   talibPersistenceMiddleware,

@@ -308,12 +308,22 @@ export class MLPluginManager {
   }
   
   /**
-   * Dispose all plugins
+   * Dispose all loaded plugins and clean up resources
    */
   async dispose(): Promise<void> {
-    await this.registry.disposeAll();
+    // Unregister and dispose all plugins
+    const allPlugins = this.registry.getAllPlugins();
+    for (const plugin of allPlugins) {
+      try {
+        plugin.dispose();
+        this.registry.unregisterPlugin(plugin.id);
+      } catch (err) {
+        // Optionally log or handle errors during disposal
+      }
+    }
+    // Clear inference hooks and results
     this.inferenceHooks.clear();
-    this.loadingStatus.next(new Map());
     this.inferenceResults.complete();
+    this.loadingStatus.complete();
   }
 }

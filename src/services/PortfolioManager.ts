@@ -1,6 +1,7 @@
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { OrderExecutor, Position, Balance } from '../trading/OrderExecutor';
 import { RiskManager, RiskConfig } from '../trading/RiskManager';
+import { NotificationService } from './NotificationService';
 
 export interface Account {
   id: string;
@@ -371,6 +372,9 @@ export class PortfolioManager {
     if (Math.abs(metrics.currentDrawdown) > limits.maxDrawdown) {
       restrictions.push(`Current drawdown (${metrics.currentDrawdown}) exceeds limit (${limits.maxDrawdown})`);
       riskScore += 20;
+      // Real-time alert
+      NotificationService.sendTelegramAlert?.(`⚠️ Drawdown Alert: Portfolio ${portfolioId} drawdown ${metrics.currentDrawdown} > limit ${limits.maxDrawdown}`);
+      NotificationService.sendSMSAlert?.(`Drawdown Alert: Portfolio ${portfolioId} drawdown ${metrics.currentDrawdown} > limit ${limits.maxDrawdown}`);
     }
 
     // Check emergency stop loss

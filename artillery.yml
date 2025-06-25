@@ -1,0 +1,14 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 10
+scenarios:
+  - flow:
+      - post:
+          url: "/api/accounts"
+          json:
+            name: "Test"
+            exchange: "binance"
+            testnet: true
+            isActive: true

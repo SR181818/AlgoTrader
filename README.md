@@ -1,6 +1,6 @@
 # AlgoTrader: Algorithmic Global Trading and Risk Management
 
-
+[![API Docs](https://img.shields.io/badge/docs-typedoc-blue)](./docs/api/index.html)
 
 This project is a sophisticated multi-asset trading dashboard designed for real-time market analysis, automated trading, strategy backtesting, portfolio management, and machine learning integration. It leverages modern web technologies, robust backend services, and blockchain for enhanced security and features.
 
@@ -371,5 +371,11 @@ Create a new Pull Request.
 
 License
 This project is licensed under the MIT License.
+
+## API Documentation
+
+*   Full TypeScript API docs are generated with [TypeDoc](https://typedoc.org/).
+*   To build docs: `npx typedoc`
+*   View docs at: `./docs/api/index.html`
 
 

@@ -215,8 +215,10 @@ export class AlgorandPaywall {
    */
   async checkSubscription(address: string): Promise<Subscription | null> {
     try {
-      // Query the indexer for transactions to our application
-      const transactions = await this.indexerClient.lookupAccountTransactions(address).do();
+      // Query the indexer for transactions to our application with retry/backoff
+      const transactions = await withExponentialBackoff(() => this.indexerClient.lookupAccountTransactions(address).do());
+      // Validate response schema
+      if (!transactions || !Array.isArray(transactions.transactions)) throw new Error('Invalid indexer response');
       
       // Find the most recent subscription payment
       const subscriptionTx = this.findSubscriptionTransaction(transactions);
@@ -278,9 +280,8 @@ export class AlgorandPaywall {
     try {
       const amount = SUBSCRIPTION_PRICES[tier];
       const sender = this.connectedAccounts[0];
-      
-      // Get suggested transaction parameters
-      const params = await this.algodClient.getTransactionParams().do();
+      // Get suggested transaction parameters with retry/backoff
+      const params = await withExponentialBackoff(() => this.algodClient.getTransactionParams().do());
       
       // Create payment transaction
       const txn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
@@ -303,11 +304,10 @@ export class AlgorandPaywall {
         signedTxn = signedTxns.blob;
       }
       
-      // Submit transaction
-      const { txId } = await this.algodClient.sendRawTransaction(signedTxn).do();
-      
-      // Wait for confirmation
-      await this.waitForConfirmation(txId);
+      // Submit transaction with retry/backoff
+      const { txId } = await withExponentialBackoff(() => this.algodClient.sendRawTransaction(signedTxn).do());
+      // Wait for confirmation with retry/backoff
+      await withExponentialBackoff(() => this.waitForConfirmation(txId));
       
       // Create subscription object
       const startDate = new Date();
@@ -327,7 +327,8 @@ export class AlgorandPaywall {
       this.onSubscriptionChangeCallback?.(subscription);
       return subscription;
     } catch (error) {
-      console.error('Error subscribing:', error);
+      // Surface error to dashboard via callback if available
+      this.onSubscriptionChangeCallback?.(null);
       throw error;
     }
   }
@@ -454,18 +455,35 @@ export class AlgorandPaywall {
    * Wait for transaction confirmation
    */
   private async waitForConfirmation(txId: string): Promise<any> {
-    const status = await this.algodClient.status().do();
+    // Add exponential backoff to each algod call
+    const status = await withExponentialBackoff(() => this.algodClient.status().do());
     let lastRound = status['last-round'];
-    
     while (true) {
-      const pendingInfo = await this.algodClient.pendingTransactionInformation(txId).do();
-      
+      const pendingInfo = await withExponentialBackoff(() => this.algodClient.pendingTransactionInformation(txId).do());
+      // Validate response schema
+      if (!pendingInfo || typeof pendingInfo !== 'object') throw new Error('Invalid pending transaction response');
       if (pendingInfo['confirmed-round'] !== null && pendingInfo['confirmed-round'] > 0) {
         return pendingInfo;
       }
-      
       lastRound++;
-      await this.algodClient.statusAfterBlock(lastRound).do();
+      await withExponentialBackoff(() => this.algodClient.statusAfterBlock(lastRound).do());
+    }
+  }
+}
+
+/**
+ * Exponential backoff utility for Algorand API calls
+ */
+async function withExponentialBackoff<T>(fn: () => Promise<T>, maxRetries = 5, baseDelay = 500): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt >= maxRetries) throw error;
+      const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 100;
+      await new Promise(res => setTimeout(res, delay));
+      attempt++;
     }
   }
 }

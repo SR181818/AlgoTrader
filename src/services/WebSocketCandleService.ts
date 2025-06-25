@@ -2,6 +2,7 @@ import { Observable, Subject, BehaviorSubject, timer, of, throwError } from 'rxj
 import { catchError, switchMap, retry, share, takeUntil, tap, finalize } from 'rxjs/operators';
 import * as ccxt from 'ccxt';
 import { CandleData, MarketData } from '../types/trading';
+import { getOrCreateSubject, registerStream } from '../utils/streamUtils';
 
 export interface WebSocketConfig {
   reconnectInterval: number;
@@ -69,16 +70,8 @@ export class WebSocketCandleService {
   subscribeToCandleStream(symbol: string, interval: string): Observable<CandleData> {
     const streamKey = `${symbol.toLowerCase()}_${interval}_candle`;
     const subscriptionId = `candle_${symbol}_${interval}`;
-    
-    if (this.streamSubjects.has(subscriptionId)) {
-      return this.streamSubjects.get(subscriptionId)!.asObservable();
-    }
-
-    const subject = new Subject<CandleData>();
-    this.streamSubjects.set(subscriptionId, subject);
-
-    // Register stream subscription
-    this.activeStreams.set(subscriptionId, {
+    const subject = getOrCreateSubject<CandleData>(this.streamSubjects, subscriptionId);
+    registerStream(this.activeStreams, subscriptionId, {
       id: subscriptionId,
       symbol,
       interval,
@@ -103,16 +96,8 @@ export class WebSocketCandleService {
   subscribeToTickerStream(symbol: string): Observable<MarketData> {
     const streamKey = `${symbol.toLowerCase()}_ticker`;
     const subscriptionId = `ticker_${symbol}`;
-    
-    if (this.streamSubjects.has(subscriptionId)) {
-      return this.streamSubjects.get(subscriptionId)!.asObservable();
-    }
-
-    const subject = new Subject<MarketData>();
-    this.streamSubjects.set(subscriptionId, subject);
-
-    // Register stream subscription
-    this.activeStreams.set(subscriptionId, {
+    const subject = getOrCreateSubject<MarketData>(this.streamSubjects, subscriptionId);
+    registerStream(this.activeStreams, subscriptionId, {
       id: subscriptionId,
       symbol,
       type: 'ticker',
@@ -598,6 +583,36 @@ export class WebSocketCandleService {
     this.activeStreams.clear();
     this.reconnectAttempts.clear();
     this.updateConnectionStatus('disconnected');
+  }
+
+  /**
+   * Stop all WebSocket streams and clean up resources
+   */
+  stop(): void {
+    // Close all WebSocket connections
+    for (const [key, ws] of this.wsConnections.entries()) {
+      try {
+        ws.close();
+      } catch (err) {
+        // Optionally log or handle errors during close
+      }
+    }
+    this.wsConnections.clear();
+    // Clear all heartbeat timers
+    for (const timer of this.heartbeatTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.heartbeatTimers.clear();
+    // Complete all subjects
+    for (const subject of this.streamSubjects.values()) {
+      subject.complete();
+    }
+    this.streamSubjects.clear();
+    this.activeStreams.clear();
+    this.reconnectAttempts.clear();
+    this.destroy$.next();
+    this.destroy$.complete();
+    this.connectionStatus.complete();
   }
 
   /**
