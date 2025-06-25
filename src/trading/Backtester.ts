@@ -550,7 +550,7 @@ export class Backtester {
         peak = point.value;
       }
       const drawdown = (peak - point.value) / peak;
-      if drawdown > maxDrawdown) {
+      if( drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
       }
     });
