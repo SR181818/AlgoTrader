@@ -12,6 +12,8 @@ import { MetricsProvider } from './monitoring/MetricsProvider';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotFoundPage from './components/NotFoundPage';
 import { PremiumLogin } from './components/PremiumLogin';
+import { useMarketData } from './hooks/useMarketData';
+import axios from 'axios';
 
 // Import pages
 import TradingDashboardPage from './pages/TradingDashboardPage';
@@ -42,7 +44,12 @@ function AppContent() {
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [subscription, setSubscription] = useState<{tier: string, active: boolean} | null>(null);
-  
+  // Example: symbol/timeframe selection (replace with your actual state/logic)
+  const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
+  const [selectedTimeframe, setSelectedTimeframe] = useState('1m');
+  // Example: strategy config state (replace with your actual state/logic)
+  const [strategyConfig, setStrategyConfig] = useState(null);
+
   // Check connection status
   useEffect(() => {
     const checkConnection = async () => {
@@ -87,20 +94,53 @@ function AppContent() {
     if (!isAuthenticated) {
       return <Navigate to="/login" />;
     }
-    
-    // Check subscription tier requirements
+    // Only support 'free' and 'ai' tiers
     if (subscription) {
-      const tierLevels = { 'free': 0, 'basic': 1, 'pro': 2, 'enterprise': 3 };
+      const tierLevels = { 'free': 0, 'ai': 1 };
       const userTierLevel = tierLevels[subscription.tier] || 0;
       const requiredTierLevel = tierLevels[requiredTier] || 0;
-      
       if (!subscription.active || userTierLevel < requiredTierLevel) {
         return <Navigate to="/blockchain" />;
       }
     }
-    
     return children;
   };
+
+  // Subscribe to live market data
+  const { candles, isConnected } = useMarketData(selectedSymbol, selectedTimeframe, { autoConnect: true });
+
+  // Send each new candle to backend TradingBotService/StrategyRunner
+  useEffect(() => {
+    if (!isAuthenticated || !subscription?.active || !candles.length) return;
+    // Send only the latest candle
+    const latestCandle = candles[candles.length - 1];
+    if (!latestCandle) return;
+    // Example REST API call to backend
+    axios.post('/api/bot/update-candle', {
+      symbol: selectedSymbol,
+      timeframe: selectedTimeframe,
+      candle: latestCandle
+    }).catch(err => {
+      // Optionally handle/report error
+      console.error('Failed to send candle to backend:', err);
+    });
+  }, [candles, isAuthenticated, subscription, selectedSymbol, selectedTimeframe]);
+
+  // Update backend strategy config when changed in the UI (e.g., from strategy builder)
+  useEffect(() => {
+    if (!isAuthenticated || !subscription?.active || !strategyConfig) return;
+    // Example REST API call to backend
+    axios.post('/api/bot/set-strategy', {
+      strategy: strategyConfig
+    }).catch(err => {
+      // Optionally handle/report error
+      console.error('Failed to update strategy config:', err);
+    });
+  }, [strategyConfig, isAuthenticated, subscription]);
+
+  // TODO: Listen for backend status/order updates (websocket or polling)
+  // Example: useWebSocket('/api/bot/updates', ...)
+  // Update UI with live order status, PnL, etc.
 
   return (
     <Router>
@@ -133,9 +173,8 @@ function AppContent() {
                 {subscription && (
                   <div className={`flex items-center px-3 py-1 rounded-lg text-sm ${
                     subscription.tier === 'free' ? 'bg-gray-600/20 text-gray-300' :
-                    subscription.tier === 'basic' ? 'bg-blue-600/20 text-blue-400' :
-                    subscription.tier === 'pro' ? 'bg-purple-600/20 text-purple-400' :
-                    'bg-yellow-600/20 text-yellow-400'
+                    subscription.tier === 'ai' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-300' :
+                    'bg-gray-700/20 text-gray-300'
                   }`}>
                     <Shield size={16} className="mr-2" />
                     {subscription.tier.toUpperCase()}
@@ -180,7 +219,7 @@ function AppContent() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage onLogin={() => setIsAuthenticated(true)} />} />
             <Route path="/register" element={<RegisterPage />} />
-            <Route path="/premium-login" element={<PremiumLogin />} />
+            <Route path="/premium-login" element={<NotFoundPage />} />
             <Route path="/dashboard" element={
               <ProtectedRoute>
                 <TradingDashboardPage />
@@ -192,7 +231,7 @@ function AppContent() {
               </ProtectedRoute>
             } />
             <Route path="/portfolio" element={
-              <ProtectedRoute requiredTier="basic">
+              <ProtectedRoute requiredTier="ai">
                 <PortfolioDashboardPage />
               </ProtectedRoute>
             } />
@@ -202,7 +241,7 @@ function AppContent() {
               </ProtectedRoute>
             } />
             <Route path="/plugins" element={
-              <ProtectedRoute requiredTier="pro">
+              <ProtectedRoute requiredTier="ai">
                 <PluginMarketplacePage />
               </ProtectedRoute>
             } />
@@ -220,7 +259,7 @@ function AppContent() {
               </ProtectedRoute>
             } />
             <Route path="/strategy-builder" element={
-              <ProtectedRoute requiredTier="pro">
+              <ProtectedRoute requiredTier="ai">
                 <StrategyBuilderPage />
               </ProtectedRoute>
             } />
