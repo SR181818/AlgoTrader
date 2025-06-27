@@ -45,17 +45,24 @@ export const SUBSCRIPTION_DURATIONS = {
  */
 export const SUBSCRIPTION_FEATURES = {
   [SubscriptionTier.FREE]: [
-    'Basic market data',
+    'All trading features',
+    'Market data & charts',
+    'Technical indicators',
+    'Backtesting',
     'Paper trading',
-    'Manual order execution',
-    'All trading features (no AI)',
+    'Manual trading',
+    'Strategy builder',
+    'Portfolio management',
+    'Risk management',
+    'Order execution',
   ],
   [SubscriptionTier.AI]: [
     'All FREE features',
-    'AI-powered signals',
-    'ML model integration',
-    'Advanced analytics',
-    'Priority support',
+    'Enhanced AI-powered signals',
+    'Advanced ML model integration',
+    'AI-driven market analysis',
+    'Predictive analytics',
+    'Priority AI support',
   ],
 };
 
@@ -315,28 +322,9 @@ export class AlgorandPaywall {
    * Check if a feature is available for the current subscription
    */
   isFeatureAvailable(featureName: string): boolean {
-    if (!this.currentSubscription || !this.currentSubscription.active) {
-      // Only free features are available
-      return SUBSCRIPTION_FEATURES[SubscriptionTier.FREE].includes(featureName);
-    }
-    
-    const tier = this.currentSubscription.tier;
-    
-    // Check if feature is available in the current tier
-    switch (tier) {
-      case SubscriptionTier.ENTERPRISE:
-        return true; // All features available
-      case SubscriptionTier.PRO:
-        return SUBSCRIPTION_FEATURES[SubscriptionTier.PRO].includes(featureName) ||
-               SUBSCRIPTION_FEATURES[SubscriptionTier.BASIC].includes(featureName) ||
-               SUBSCRIPTION_FEATURES[SubscriptionTier.FREE].includes(featureName);
-      case SubscriptionTier.BASIC:
-        return SUBSCRIPTION_FEATURES[SubscriptionTier.BASIC].includes(featureName) ||
-               SUBSCRIPTION_FEATURES[SubscriptionTier.FREE].includes(featureName);
-      case SubscriptionTier.FREE:
-      default:
-        return SUBSCRIPTION_FEATURES[SubscriptionTier.FREE].includes(featureName);
-    }
+    // All features are now available by default
+    // Users can optionally subscribe to AI tier for enhanced AI features
+    return true;
   }
 
   /**

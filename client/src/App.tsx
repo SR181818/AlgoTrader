@@ -70,17 +70,7 @@ function AppContent() {
       return <LoginPage onLogin={handleLogin} />;
     }
     
-    // Check tier requirements
-    if (subscription && requiredTier !== 'free') {
-      const tierLevels = { 'free': 0, 'ai': 1 };
-      const userTierLevel = tierLevels[subscription.tier as keyof typeof tierLevels] || 0;
-      const requiredTierLevel = tierLevels[requiredTier as keyof typeof tierLevels] || 0;
-      
-      if (userTierLevel < requiredTierLevel) {
-        return <BlockchainPaywallPage />;
-      }
-    }
-    
+    // All features are now free - no tier restrictions
     return <>{children}</>;
   };
 

@@ -52,32 +52,6 @@ export function FeaturePaywall({
     );
   }
 
-  if (isAvailable) {
-    return <>{children}</>;
-  }
-
-  // Feature is not available, show paywall
-  return fallbackContent || (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-      <div className="flex flex-col items-center text-center">
-        <div className="p-3 bg-blue-600/20 rounded-full mb-4">
-          <Lock size={24} className="text-blue-400" />
-        </div>
-        
-        <h3 className="text-white font-medium mb-2">Premium Feature</h3>
-        
-        <p className="text-gray-400 text-sm mb-4">
-          This feature requires an AI subscription.
-        </p>
-        
-        <button
-          onClick={handleSubscribe}
-          className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
-        >
-          <CreditCard size={16} className="mr-2" />
-          Upgrade Subscription
-        </button>
-      </div>
-    </div>
-  );
+  // All features are now free by default
+  return <>{children}</>;
 }

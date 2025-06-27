@@ -127,46 +127,41 @@ export default function BlockchainPaywallPage({ onSubscriptionChange }: Blockcha
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
             <h2 className="text-xl font-semibold text-white mb-4">Premium Features</h2>
             <p className="text-gray-400 mb-6">
-              Access advanced trading features with blockchain-based subscriptions. Your subscription is stored on the Algorand blockchain, providing transparent and secure access control.
+              All trading features are free! Optionally upgrade to AI subscription for enhanced machine learning capabilities. Your subscription is stored on the Algorand blockchain for transparency and security.
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Free features */}
+              {/* All trading features are free */}
               <div className="bg-gray-700/50 rounded-lg p-4">
                 <div className="flex items-center mb-3">
                   <div className="p-2 bg-green-600/20 rounded-lg mr-3">
                     <Unlock size={18} className="text-green-400" />
                   </div>
                   <div>
-                    <h3 className="text-white font-medium">Basic Market Data</h3>
-                    <p className="text-xs text-gray-400">Available to all users</p>
+                    <h3 className="text-white font-medium">Complete Trading Platform</h3>
+                    <p className="text-xs text-gray-400">Free for all users</p>
                   </div>
                 </div>
                 <p className="text-sm text-gray-300">
-                  Access basic market data and simple technical analysis tools.
+                  Access all trading features including backtesting, strategy building, portfolio management, and technical analysis.
                 </p>
               </div>
               
-              {/* AI features */}
-              <FeaturePaywall
-                featureName="AI-powered signals"
-                onSubscribe={() => handleSubscribeClick(SubscriptionTier.AI)}
-              >
-                <div className="bg-gray-700/50 rounded-lg p-4">
-                  <div className="flex items-center mb-3">
-                    <div className="p-2 bg-blue-600/20 rounded-lg mr-3">
-                      <Bot size={18} className="text-blue-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-white font-medium">AI-Powered Signals</h3>
-                      <p className="text-xs text-blue-400">AI Plan Feature</p>
-                    </div>
+              {/* AI features as optional enhancement */}
+              <div className="bg-gray-700/50 rounded-lg p-4">
+                <div className="flex items-center mb-3">
+                  <div className="p-2 bg-blue-600/20 rounded-lg mr-3">
+                    <Bot size={18} className="text-blue-400" />
                   </div>
-                  <p className="text-sm text-gray-300">
-                    Unlock advanced AI-powered trading signals and analytics.
-                  </p>
+                  <div>
+                    <h3 className="text-white font-medium">Enhanced AI Features</h3>
+                    <p className="text-xs text-blue-400">Optional AI Plan</p>
+                  </div>
                 </div>
-              </FeaturePaywall>
+                <p className="text-sm text-gray-300">
+                  Upgrade to access enhanced AI-powered signals, advanced ML models, and predictive analytics.
+                </p>
+              </div>
             </div>
           </div>
           
