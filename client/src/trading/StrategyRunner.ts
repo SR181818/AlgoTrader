@@ -192,9 +192,8 @@ export class StrategyRunner {
   getConfig(): StrategyConfig {
     return this.config;
   }
-}
 
-// Static factory methods for creating strategy configurations
+  // Static factory methods for creating strategy configurations
   static createDefaultStrategy(): StrategyConfig {
     return {
       name: 'Multi-Indicator Confluence Strategy',
