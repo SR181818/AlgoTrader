@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link } from 'wouter';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -87,7 +87,7 @@ export default function LandingPage() {
               transition={{ delay: 0.5, duration: 0.5 }}
               className="flex flex-col sm:flex-row justify-center gap-4"
             >
-              <Link to="/register" className="px-8 py-4 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors flex items-center justify-center">
+              <Link href="/register" className="px-8 py-4 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors flex items-center justify-center">
                 Get Started
                 <ArrowRight size={18} className="ml-2" />
               </Link>
@@ -218,7 +218,7 @@ export default function LandingPage() {
             </p>
             
             <div className="flex flex-col sm:flex-row justify-center gap-4">
-              <Link to="/register" className="px-8 py-4 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors flex items-center justify-center">
+              <Link href="/register" className="px-8 py-4 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors flex items-center justify-center">
                 Get Started Now
                 <ArrowRight size={18} className="ml-2" />
               </Link>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'wouter';
 import { User, Lock, Mail, AlertCircle, UserPlus } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -9,7 +9,7 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +45,7 @@ export default function RegisterPage() {
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
       }));
       
-      navigate('/dashboard');
+      setLocation('/dashboard');
     } catch (err) {
       setError('Registration failed. Please try again.');
     } finally {

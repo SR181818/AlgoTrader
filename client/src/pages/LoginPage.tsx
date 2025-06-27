@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'wouter';
 import { User, Lock, Mail, AlertCircle } from 'lucide-react';
 
 interface LoginPageProps {
@@ -11,7 +11,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +37,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         }));
         
         onLogin();
-        navigate('/dashboard');
+        setLocation('/dashboard');
       } else {
         // For demo, allow any login
         localStorage.setItem('userToken', 'demo-token-' + Math.random().toString(36).substring(2));
@@ -49,7 +49,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         }));
         
         onLogin();
-        navigate('/dashboard');
+        setLocation('/dashboard');
       }
     } catch (err) {
       setError('Login failed. Please check your credentials and try again.');
