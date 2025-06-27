@@ -170,19 +170,7 @@ function AppContent() {
             <SettingsPage />
           </ProtectedRoute>
         </Route>
-        
-        {/* 404 Route */}
-        <Route>
-          <div className="min-h-screen flex items-center justify-center">
-            <div className="text-center">
-              <h1 className="text-4xl font-bold text-white mb-4">404</h1>
-              <p className="text-gray-400 mb-4">Page not found</p>
-              <Link href="/" className="text-blue-400 hover:text-blue-300">
-                Go back to home
-              </Link>
-            </div>
-          </div>
-        </Route>
+
       </Router>
     </div>
   );
