@@ -1,0 +1,55 @@
+Bolt: "Scaffold a production-grade, end-to-end modular trading platform in TypeScript/React (Vite) with 14 integrated modules and enterprise-ready features:
+
+1. PersistCustomIndicators  
+   • Redux Toolkit slice (or React Context) to persist TA-Lib indicator configs (localStorage or backend) with full CRUD, state rehydration, and Zod validation.  
+
+2. WebSocketCandleService (via ccxt JS plugin)  
+   • TS service using ccxt’s JS plugin to stream live OHLCV and ticker data.  
+   • Normalize into `CandleData`, auto-reconnect, expose RxJS Observables, and validate incoming payloads.  
+
+3. StrategyRunner  
+   • Class consuming live candles + indicator signals to apply rule sets (e.g. EMA20>EMA50 & RSI<30 → BUY), emit typed events (‘LONG’, ‘SHORT’, ‘HOLD’), and log via a centralized Logger.  
+
+4. OrderExecutor  
+   • Module using ccxt for real (Binance testnet) and paper trading; handle rate limits, retries, idempotency, and optimistic UI updates.  
+
+5. RiskManager  
+   • Utility calculating dynamic position sizes (1% risk per trade via ATR or fixed-fraction), enforcing daily drawdown, rejecting invalid orders, and emitting real-time alerts (Telegram/email).  
+
+6. Backtester  
+   • TS backtester replaying OHLCV CSVs, feeding StrategyRunner & paper OrderExecutor, outputting Sharpe ratio, max drawdown, win rate, and equity curves.  
+
+7. LiveDashboard & Alerts  
+   • React components: drag-and-drop visual strategy builder, PnL gauge, positions table, signal log.  
+   • Inline tooltips, guided onboarding, express-rate-limit, form validation, and webhooks/Telegram/email alerts.  
+
+8. Tests & CI/CD  
+   • Jest unit/integration tests (core modules + Express routes) with mocks for ccxt & Prisma.  
+   • GitHub Actions pipeline: lint (ESLint), type-check, test, build Docker image, security scans (Snyk, OWASP ZAP), and publish to Docker Hub.  
+
+9. Multi-Account & Portfolio Manager  
+   • Express/TypeORM service with multi-tenant DB models, RESTful CRUD, aggregated PnL analytics, and schema validation.  
+
+10. ML-Driven Signal Plugins  
+   • Plugin API to integrate TensorFlow.js/ONNX models, training pipelines, real-time inference hooks, sandboxed via VM2.  
+
+11. Community Plugin Marketplace & Billing  
+   • Microservice with plugin CRUD/versioning, user ratings, Stripe subscription/one-time billing, and sandboxed execution.  
+
+12. Real-Time Performance Monitoring  
+   • Prometheus exporters for API latency, error rates, ccxt call durations, backtest times; Grafana dashboards + Alertmanager for anomalies.  
+
+13. Security Audit & Hardening  
+   • Vault-backed secret management, RBAC, audit logs, API key rotation; integrate OWASP ZAP & Snyk in CI; centralized error handling middleware & React ErrorBoundary.  
+
+14. Blockchain Paywall & Decentralized Identity  
+   • Algorand module: on-chain payment verification via Indexer + TEAL contracts; issue verifiable access tokens; integrate MyAlgo/AlgoSigner; full retry and fallback logic.  
+
+Plus:  
+• Alias or polyfill Node built-ins (e.g. `node:net.isIP`) in Vite.  
+• Mark `.prisma/client/index-browser` external or alias to stub—Prisma strictly server-side.  
+• Secure secrets with Vault/AWS Secrets Manager; remove plaintext `.env`.  
+• Enforce Zod/Joi schemas, express-rate-limit (100 req/min), and structured logging (Winston/Pino).  
+• Optimize performance: Web Workers for heavy compute, Redis cache for static data, pagination on marketplace.  
+
+Ensure everything is visual (no CLI tools), robustly validated, monitored, and stable in live production."  
