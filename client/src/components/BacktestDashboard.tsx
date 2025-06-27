@@ -17,7 +17,7 @@ import {
   CheckCircle,
   Activity
 } from 'lucide-react';
-import { createChart, ColorType, LineStyle } from 'lightweight-charts';
+import { createChart, ColorType, LineStyle, IChartApi } from 'lightweight-charts';
 
 interface BacktestDashboardProps {
   onResultsGenerated?: (results: BacktestResult) => void;
@@ -104,41 +104,42 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       // Clear previous chart
       chartContainerRef.current.innerHTML = '';
       
-      // Create chart
-      const chart = createChart(chartContainerRef.current, {
-        width: chartContainerRef.current.clientWidth,
-        height: 400,
-        layout: {
-          background: { type: ColorType.Solid, color: '#1f2937' },
-          textColor: '#d1d5db',
-        },
-        grid: {
-          vertLines: { color: '#374151' },
-          horzLines: { color: '#374151' },
-        },
-        rightPriceScale: {
-          borderColor: '#4b5563',
-        },
-        timeScale: {
-          borderColor: '#4b5563',
-        },
-      });
-      
-      // Add equity curve series
-      const equitySeries = chart.addLineSeries({
-        color: '#60A5FA',
-        lineWidth: 2,
-        title: 'Equity',
-      });
-      
-      // Add drawdown series
-      const drawdownSeries = chart.addLineSeries({
-        color: '#EF4444',
-        lineWidth: 1,
-        lineStyle: LineStyle.Dashed,
-        title: 'Drawdown',
-        priceScaleId: 'drawdown',
-      });
+      try {
+        // Create chart
+        const chart: IChartApi = createChart(chartContainerRef.current, {
+          width: chartContainerRef.current.clientWidth,
+          height: 400,
+          layout: {
+            background: { type: ColorType.Solid, color: '#1f2937' },
+            textColor: '#d1d5db',
+          },
+          grid: {
+            vertLines: { color: '#374151' },
+            horzLines: { color: '#374151' },
+          },
+          rightPriceScale: {
+            borderColor: '#4b5563',
+          },
+          timeScale: {
+            borderColor: '#4b5563',
+          },
+        });
+        
+        // Add equity curve series
+        const equitySeries = chart.addLineSeries({
+          color: '#60A5FA',
+          lineWidth: 2,
+          title: 'Equity',
+        });
+        
+        // Add drawdown series
+        const drawdownSeries = chart.addLineSeries({
+          color: '#EF4444',
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          title: 'Drawdown',
+          priceScaleId: 'drawdown',
+        });
       
       // Configure drawdown scale
       chart.priceScale('drawdown').applyOptions({
@@ -185,9 +186,13 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       }
       
       return () => {
-        resizeObserver.disconnect();
-        chart.remove();
-      };
+          resizeObserver.disconnect();
+          chart.remove();
+        };
+      } catch (error) {
+        console.error('Error creating chart:', error);
+        setError(`Failed to create chart: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }, [results, config.initialBalance]);
 
