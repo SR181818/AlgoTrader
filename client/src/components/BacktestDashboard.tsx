@@ -1,35 +1,51 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Backtester, BacktestConfig, BacktestResult, BacktestProgress } from '../trading/Backtester';
-import { StrategyRunner } from '../trading/StrategyRunner';
-import { CandleData } from '../types/trading';
-import { 
-  Play, 
-  Pause, 
-  Square, 
-  Upload, 
-  Download, 
-  BarChart3, 
-  TrendingUp, 
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import {
+  Backtester,
+  BacktestConfig,
+  BacktestResult,
+  BacktestProgress,
+} from "../trading/Backtester";
+import { StrategyRunner } from "../trading/StrategyRunner";
+import { CandleData } from "../types/trading";
+import {
+  Play,
+  Pause,
+  Square,
+  Upload,
+  Download,
+  BarChart3,
+  TrendingUp,
   TrendingDown,
   Clock,
   Target,
   AlertTriangle,
   CheckCircle,
-  Activity
-} from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+  Activity,
+} from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 interface BacktestDashboardProps {
   onResultsGenerated?: (results: BacktestResult) => void;
 }
 
-export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps) {
+export function BacktestDashboard({
+  onResultsGenerated,
+}: BacktestDashboardProps) {
   const [backtester, setBacktester] = useState<Backtester | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState<BacktestProgress | null>(null);
   const [results, setResults] = useState<BacktestResult | null>(null);
-  const [csvData, setCsvData] = useState<string>('');
+  const [csvData, setCsvData] = useState<string>("");
   const [sampleDataGenerated, setSampleDataGenerated] = useState(false);
   const [sampleData, setSampleData] = useState<CandleData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,9 +58,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     replaySpeed: 100,
     commission: 0.001,
     slippage: 0.001,
-    symbol: 'BTC/USDT',
-    timeframe: '15m',
-    epochs: 100
+    symbol: "BTC/USDT",
+    timeframe: "15m",
+    epochs: 100,
   });
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
@@ -65,14 +81,14 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
           maxCorrelatedPositions: 2,
           minRiskRewardRatio: 2,
           maxLeverage: 3,
-          emergencyStopLoss: 0.10,
+          emergencyStopLoss: 0.1,
           cooldownPeriod: 60,
         },
         executorConfig: {
           paperTrading: true,
-          exchange: 'binance',
+          exchange: "binance",
           testnet: true,
-          defaultOrderType: 'market',
+          defaultOrderType: "market",
           slippageTolerance: 0.1,
           maxOrderSize: 1000,
           enableStopLoss: true,
@@ -81,9 +97,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         replaySpeed: config.replaySpeed || 100,
         commission: config.commission || 0.001,
         slippage: config.slippage || 0.001,
-        symbol: config.symbol || 'BTC/USDT',
-        timeframe: config.timeframe || '15m',
-        epochs: config.epochs || 100
+        symbol: config.symbol || "BTC/USDT",
+        timeframe: config.timeframe || "15m",
+        epochs: config.epochs || 100,
       };
 
       const newBacktester = new Backtester(backtestConfig);
@@ -109,7 +125,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         trade: index + 1,
         equity: equity,
         pnl: trade.pnl || 0,
-        date: new Date(trade.exitTime).toLocaleDateString()
+        date: new Date(trade.exitTime).toLocaleDateString(),
       };
     });
   }, [results]);
@@ -130,9 +146,10 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
 
   const generateSampleData = () => {
     const data: CandleData[] = [];
-    const startTime = config.startDate?.getTime() || (Date.now() - (1000 * 60 * 60 * 24 * 30)); // 30 days ago
+    const startTime =
+      config.startDate?.getTime() || Date.now() - 1000 * 60 * 60 * 24 * 30; // 30 days ago
     const endTime = config.endDate?.getTime() || Date.now();
-    const timeframeMs = getTimeframeInMs(config.timeframe || '15m');
+    const timeframeMs = getTimeframeInMs(config.timeframe || "15m");
 
     let currentPrice = 50000; // Starting BTC price
     let currentTime = startTime;
@@ -142,14 +159,17 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       const hourOfDay = new Date(currentTime).getHours();
       const volatilityMultiplier = hourOfDay >= 9 && hourOfDay <= 16 ? 1.5 : 1; // Higher volatility during trading hours
 
-      const change = (Math.random() - 0.5) * currentPrice * 0.015 * volatilityMultiplier;
+      const change =
+        (Math.random() - 0.5) * currentPrice * 0.015 * volatilityMultiplier;
       const open = currentPrice;
       const close = Math.max(100, currentPrice + change); // Prevent negative prices
 
       // Create realistic OHLC
       const direction = close > open ? 1 : -1;
-      const highExtra = Math.random() * currentPrice * 0.008 * Math.abs(direction);
-      const lowExtra = Math.random() * currentPrice * 0.008 * Math.abs(direction);
+      const highExtra =
+        Math.random() * currentPrice * 0.008 * Math.abs(direction);
+      const lowExtra =
+        Math.random() * currentPrice * 0.008 * Math.abs(direction);
 
       const high = Math.max(open, close) + highExtra;
       const low = Math.min(open, close) - lowExtra;
@@ -161,7 +181,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         high,
         low,
         close,
-        volume
+        volume,
       });
 
       currentPrice = close;
@@ -170,25 +190,27 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
 
     setSampleData(data);
     setSampleDataGenerated(true);
-    console.log(`Generated ${data.length} sample candles from ${new Date(startTime)} to ${new Date(endTime)}`);
+    console.log(
+      `Generated ${data.length} sample candles from ${new Date(startTime)} to ${new Date(endTime)}`,
+    );
   };
 
   const getTimeframeInMs = (timeframe: string): number => {
     const timeframeMap: { [key: string]: number } = {
-      '1m': 60 * 1000,
-      '5m': 5 * 60 * 1000,
-      '15m': 15 * 60 * 1000,
-      '30m': 30 * 60 * 1000,
-      '1h': 60 * 60 * 1000,
-      '4h': 4 * 60 * 60 * 1000,
-      '1d': 24 * 60 * 60 * 1000,
+      "1m": 60 * 1000,
+      "5m": 5 * 60 * 1000,
+      "15m": 15 * 60 * 1000,
+      "30m": 30 * 60 * 1000,
+      "1h": 60 * 60 * 1000,
+      "4h": 4 * 60 * 60 * 1000,
+      "1d": 24 * 60 * 60 * 1000,
     };
     return timeframeMap[timeframe] || 15 * 60 * 1000;
   };
 
   const startBacktest = async () => {
     if (!backtester) {
-      setError('Backtester not initialized');
+      setError("Backtester not initialized");
       return;
     }
 
@@ -218,8 +240,10 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         onResultsGenerated(result);
       }
     } catch (error) {
-      console.error('Backtest failed:', error);
-      setError(`Backtest failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error("Backtest failed:", error);
+      setError(
+        `Backtest failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       setIsRunning(false);
       setIsLoading(false);
@@ -251,43 +275,45 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     if (!results) return;
 
     const csvContent = [
-      'Trade ID,Symbol,Side,Entry Time,Exit Time,Entry Price,Exit Price,Quantity,PnL,PnL %,Commission,Duration (ms)',
-      ...results.trades.map(trade => [
-        trade.id,
-        trade.symbol,
-        trade.side,
-        new Date(trade.entryTime).toISOString(),
-        trade.exitTime ? new Date(trade.exitTime).toISOString() : '',
-        trade.entryPrice,
-        trade.exitPrice || '',
-        trade.quantity,
-        trade.pnl || '',
-        trade.pnlPercent || '',
-        trade.commission,
-        trade.duration || ''
-      ].join(','))
-    ].join('\n');
+      "Trade ID,Symbol,Side,Entry Time,Exit Time,Entry Price,Exit Price,Quantity,PnL,PnL %,Commission,Duration (ms)",
+      ...results.trades.map((trade) =>
+        [
+          trade.id,
+          trade.symbol,
+          trade.side,
+          new Date(trade.entryTime).toISOString(),
+          trade.exitTime ? new Date(trade.exitTime).toISOString() : "",
+          trade.entryPrice,
+          trade.exitPrice || "",
+          trade.quantity,
+          trade.pnl || "",
+          trade.pnlPercent || "",
+          trade.commission,
+          trade.duration || "",
+        ].join(","),
+      ),
+    ].join("\n");
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `backtest_results_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `backtest_results_${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
   };
 
   const formatPercent = (value: number) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+    return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
   };
 
   // Get strategy by name
@@ -303,7 +329,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
 
   const runBacktest = async () => {
     if (!backtester) {
-      setError('Backtester not initialized');
+      setError("Backtester not initialized");
       return;
     }
 
@@ -325,12 +351,12 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         // Generate sample data if none exists
         generateSampleData();
         // Wait for sample data to be set
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         dataToUse = sampleData;
       }
 
       if (dataToUse.length === 0) {
-        throw new Error('No data available for backtesting');
+        throw new Error("No data available for backtesting");
       }
 
       console.log(`Loading ${dataToUse.length} candles for backtesting`);
@@ -344,7 +370,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         strategyRunner.initializeIndicators(dataToUse);
       }
 
-      console.log('Starting backtest...');
+      console.log("Starting backtest...");
 
       // Run backtest
       const results = await backtester.startBacktest();
@@ -354,14 +380,14 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         onResultsGenerated(results);
       }
 
-      console.log('Backtest completed successfully:', {
+      console.log("Backtest completed successfully:", {
         totalTrades: results.totalTrades,
         totalReturn: results.totalReturn,
-        winRate: results.winRate
+        winRate: results.winRate,
       });
     } catch (error: any) {
-      console.error('Backtest failed:', error);
-      setError(error.message || 'Backtest failed');
+      console.error("Backtest failed:", error);
+      setError(error.message || "Backtest failed");
     } finally {
       setIsRunning(false);
       setIsPaused(false);
@@ -380,14 +406,18 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     <div className="space-y-6">
       {/* Configuration Panel */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-bold text-white mb-4">Backtest Configuration</h2>
+        <h2 className="text-xl font-bold text-white mb-4">
+          Backtest Configuration
+        </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm text-gray-300 mb-1">Symbol</label>
             <select
-              value={config.symbol || 'BTC/USDT'}
-              onChange={(e) => setConfig(prev => ({ ...prev, symbol: e.target.value }))}
+              value={config.symbol || "BTC/USDT"}
+              onChange={(e) =>
+                setConfig((prev) => ({ ...prev, symbol: e.target.value }))
+              }
               className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
             >
               <option value="BTC/USDT">BTC/USDT</option>
@@ -398,10 +428,14 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             </select>
           </div>
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Timeframe</label>
+            <label className="block text-sm text-gray-300 mb-1">
+              Timeframe
+            </label>
             <select
-              value={config.timeframe || '15m'}
-              onChange={(e) => setConfig(prev => ({ ...prev, timeframe: e.target.value }))}
+              value={config.timeframe || "15m"}
+              onChange={(e) =>
+                setConfig((prev) => ({ ...prev, timeframe: e.target.value }))
+              }
               className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
             >
               <option value="1m">1 Minute</option>
@@ -428,11 +462,18 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Start Date</label>
+            <label className="block text-sm text-gray-300 mb-1">
+              Start Date
+            </label>
             <input
               type="date"
-              value={config.startDate?.toISOString().split('T')[0] || ''}
-              onChange={(e) => setConfig(prev => ({ ...prev, startDate: new Date(e.target.value) }))}
+              value={config.startDate?.toISOString().split("T")[0] || ""}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  startDate: new Date(e.target.value),
+                }))
+              }
               className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
             />
           </div>
@@ -440,17 +481,29 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             <label className="block text-sm text-gray-300 mb-1">End Date</label>
             <input
               type="date"
-              value={config.endDate?.toISOString().split('T')[0] || ''}
-              onChange={(e) => setConfig(prev => ({ ...prev, endDate: new Date(e.target.value) }))}
+              value={config.endDate?.toISOString().split("T")[0] || ""}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  endDate: new Date(e.target.value),
+                }))
+              }
               className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Initial Balance</label>
+            <label className="block text-sm text-gray-300 mb-1">
+              Initial Balance
+            </label>
             <input
               type="number"
               value={config.initialBalance || 10000}
-              onChange={(e) => setConfig(prev => ({ ...prev, initialBalance: parseFloat(e.target.value) }))}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  initialBalance: parseFloat(e.target.value),
+                }))
+              }
               className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
             />
           </div>
@@ -458,10 +511,17 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Replay Speed</label>
+            <label className="block text-sm text-gray-300 mb-1">
+              Replay Speed
+            </label>
             <select
               value={config.replaySpeed || 100}
-              onChange={(e) => setConfig(prev => ({ ...prev, replaySpeed: parseInt(e.target.value) }))}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  replaySpeed: parseInt(e.target.value),
+                }))
+              }
               className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
             >
               <option value={1}>1x (Real-time)</option>
@@ -472,22 +532,36 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             </select>
           </div>
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Commission (%)</label>
+            <label className="block text-sm text-gray-300 mb-1">
+              Commission (%)
+            </label>
             <input
               type="number"
               step="0.001"
               value={config.commission || 0.001}
-              onChange={(e) => setConfig(prev => ({ ...prev, commission: parseFloat(e.target.value) }))}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  commission: parseFloat(e.target.value),
+                }))
+              }
               className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-300 mb-1">Slippage (%)</label>
+            <label className="block text-sm text-gray-300 mb-1">
+              Slippage (%)
+            </label>
             <input
               type="number"
               step="0.001"
               value={config.slippage || 0.001}
-              onChange={(e) => setConfig(prev => ({ ...prev, slippage: parseFloat(e.target.value) }))}
+              onChange={(e) =>
+                setConfig((prev) => ({
+                  ...prev,
+                  slippage: parseFloat(e.target.value),
+                }))
+              }
               className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
             />
           </div>
@@ -495,7 +569,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
 
         {/* Data Upload */}
         <div className="mb-4">
-          <label className="block text-sm text-gray-300 mb-2">Historical Data (CSV or Generate Sample)</label>
+          <label className="block text-sm text-gray-300 mb-2">
+            Historical Data (CSV or Generate Sample)
+          </label>
           <div className="flex items-center space-x-4">
             <input
               type="file"
@@ -517,7 +593,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                   const data = generateSampleData();
                   setSampleData(data);
                 } catch (error) {
-                  setError(`Failed to generate sample data: ${error instanceof Error ? error.message : String(error)}`);
+                  setError(
+                    `Failed to generate sample data: ${error instanceof Error ? error.message : String(error)}`,
+                  );
                 }
               }}
               className="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white transition-colors"
@@ -529,7 +607,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               <span className="text-green-400 text-sm">✓ CSV data loaded</span>
             )}
             {sampleDataGenerated && !csvData && (
-              <span className="text-purple-400 text-sm">✓ Sample data generated ({sampleData.length} candles)</span>
+              <span className="text-purple-400 text-sm">
+                ✓ Sample data generated ({sampleData.length} candles)
+              </span>
             )}
           </div>
         </div>
@@ -539,11 +619,13 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
           {!isRunning ? (
             <button
               onClick={runBacktest}
-              disabled={!backtester || isLoading || (!csvData && !sampleDataGenerated)}
+              disabled={
+                !backtester || isLoading || (!csvData && !sampleDataGenerated)
+              }
               className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-white transition-colors"
             >
               <Play size={16} className="mr-2" />
-              {isLoading ? 'Loading...' : 'Start Backtest'}
+              {isLoading ? "Loading..." : "Start Backtest"}
             </button>
           ) : (
             <>
@@ -551,8 +633,12 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                 onClick={pauseBacktest}
                 className="flex items-center px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white transition-colors"
               >
-                {isPaused ? <Play size={16} className="mr-2" /> : <Pause size={16} className="mr-2" />}
-                {isPaused ? 'Resume' : 'Pause'}
+                {isPaused ? (
+                  <Play size={16} className="mr-2" />
+                ) : (
+                  <Pause size={16} className="mr-2" />
+                )}
+                {isPaused ? "Resume" : "Pause"}
               </button>
               <button
                 onClick={stopBacktest}
@@ -564,7 +650,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             </>
           )}
           {!csvData && !sampleDataGenerated && (
-            <span className="text-yellow-400 text-sm">Please upload CSV data or generate sample data first</span>
+            <span className="text-yellow-400 text-sm">
+              Please upload CSV data or generate sample data first
+            </span>
           )}
         </div>
 
@@ -580,7 +668,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       {progress && (
         <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Backtest Progress</h3>
+            <h3 className="text-lg font-semibold text-white">
+              Backtest Progress
+            </h3>
             <div className="text-sm text-gray-400">
               {progress.processedCandles} / {progress.totalCandles} candles
             </div>
@@ -592,7 +682,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               <span>{progress.progress.toFixed(1)}%</span>
             </div>
             <div className="bg-gray-700 rounded-full h-2">
-              <div 
+              <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${progress.progress}%` }}
               />
@@ -614,7 +704,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             </div>
             <div className="bg-gray-700/50 rounded-lg p-3">
               <div className="text-gray-400 text-sm">Drawdown</div>
-              <div className={`font-mono ${progress.currentDrawdown < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+              <div
+                className={`font-mono ${progress.currentDrawdown < 0 ? "text-red-400" : "text-gray-400"}`}
+              >
                 {formatPercent(progress.currentDrawdown * 100)}
               </div>
             </div>
@@ -636,7 +728,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             <Card>
               <CardContent className="p-4">
                 <div className="text-sm text-gray-600">Total Return</div>
-                <div className={`text-2xl font-bold ${results.totalReturnPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <div
+                  className={`text-2xl font-bold ${results.totalReturnPercent >= 0 ? "text-green-600" : "text-red-600"}`}
+                >
                   {results.totalReturnPercent.toFixed(2)}%
                 </div>
                 <div className="text-xs text-gray-500">
@@ -663,9 +757,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                 <div className="text-2xl font-bold text-red-600">
                   {results.maxDrawdownPercent.toFixed(2)}%
                 </div>
-                <div className="text-xs text-gray-500">
-                  Peak to trough
-                </div>
+                <div className="text-xs text-gray-500">Peak to trough</div>
               </CardContent>
             </Card>
 
@@ -687,7 +779,8 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             <CardHeader>
               <CardTitle>Equity Curve</CardTitle>
               <CardDescription>
-                Portfolio value over time with {results.trades.length} trades executed
+                Portfolio value over time with {results.trades.length} trades
+                executed
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -699,18 +792,18 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                       <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                       <XAxis dataKey="trade" stroke="#d1d5db" />
                       <YAxis stroke="#d1d5db" />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: '#1f2937', 
-                          border: '1px solid #374151', 
-                          borderRadius: '6px' 
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "#1f2937",
+                          border: "1px solid #374151",
+                          borderRadius: "6px",
                         }}
                       />
                       <Legend />
-                      <Line 
-                        type="monotone" 
-                        dataKey="equity" 
-                        stroke="#3b82f6" 
+                      <Line
+                        type="monotone"
+                        dataKey="equity"
+                        stroke="#3b82f6"
                         strokeWidth={2}
                         dot={false}
                         name="Portfolio Value"
@@ -735,7 +828,9 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                 </div>
                 <div className="flex justify-between">
                   <span>Winning Trades</span>
-                  <span className="text-green-600">{results.winningTrades}</span>
+                  <span className="text-green-600">
+                    {results.winningTrades}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Losing Trades</span>
@@ -743,23 +838,33 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                 </div>
                 <div className="flex justify-between">
                   <span>Average Win</span>
-                  <span className="text-green-600">${results.averageWin.toFixed(2)}</span>
+                  <span className="text-green-600">
+                    ${results.averageWin.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Average Loss</span>
-                  <span className="text-red-600">-${results.averageLoss.toFixed(2)}</span>
+                  <span className="text-red-600">
+                    -${results.averageLoss.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Largest Win</span>
-                  <span className="text-green-600">${results.largestWin.toFixed(2)}</span>
+                  <span className="text-green-600">
+                    ${results.largestWin.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Largest Loss</span>
-                  <span className="text-red-600">-${Math.abs(results.largestLoss).toFixed(2)}</span>
+                  <span className="text-red-600">
+                    -${Math.abs(results.largestLoss).toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Profit Factor</span>
-                  <span className="font-semibold">{results.profitFactor.toFixed(2)}</span>
+                  <span className="font-semibold">
+                    {results.profitFactor.toFixed(2)}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -771,19 +876,27 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               <CardContent className="space-y-3">
                 <div className="flex justify-between">
                   <span>Sharpe Ratio</span>
-                  <span className="font-semibold">{results.sharpeRatio.toFixed(2)}</span>
+                  <span className="font-semibold">
+                    {results.sharpeRatio.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Sortino Ratio</span>
-                  <span className="font-semibold">{results.sortinoRatio.toFixed(2)}</span>
+                  <span className="font-semibold">
+                    {results.sortinoRatio.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Calmar Ratio</span>
-                  <span className="font-semibold">{results.calmarRatio.toFixed(2)}</span>
+                  <span className="font-semibold">
+                    {results.calmarRatio.toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Max Drawdown</span>
-                  <span className="text-red-600">{results.maxDrawdownPercent.toFixed(2)}%</span>
+                  <span className="text-red-600">
+                    {results.maxDrawdownPercent.toFixed(2)}%
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Time in Market</span>
@@ -791,14 +904,18 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                 </div>
                 <div className="flex justify-between">
                   <span>Consecutive Wins</span>
-                  <span className="text-green-600">{results.consecutiveWins}</span>
+                  <span className="text-green-600">
+                    {results.consecutiveWins}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Consecutive Losses</span>
-                  <span className="text-red-600">{results.consecutiveLosses}</span>
+                  <span className="text-red-600">
+                    {results.consecutiveLosses}
+                  </span>
                 </div>
               </CardContent>
-            </            </Card>
+            </Card>
           </div>
 
           {/* Recent Trades */}
@@ -822,26 +939,41 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                       </tr>
                     </thead>
                     <tbody>
-                      {results.trades.slice(-10).reverse().map((trade, index) => (
-                        <tr key={trade.id} className="border-b">
-                          <td className="p-2">{trade.symbol}</td>
-                          <td className="p-2">
-                            <span className={`px-2 py-1 rounded text-xs ${
-                              trade.side === 'buy' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                            }`}>
-                              {trade.side.toUpperCase()}
-                            </span>
-                          </td>
-                          <td className="p-2">${trade.entryPrice.toFixed(2)}</td>
-                          <td className="p-2">${trade.exitPrice?.toFixed(2) || '-'}</td>
-                          <td className={`p-2 ${(trade.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-${(trade.pnl || 0).toFixed(2)}
-                          </td>
-                          <td className={`p-2 ${(trade.pnlPercent || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {(trade.pnlPercent || 0).toFixed(1)}%
-                          </td>
-                        </tr>
-                      ))}
+                      {results.trades
+                        .slice(-10)
+                        .reverse()
+                        .map((trade, index) => (
+                          <tr key={trade.id} className="border-b">
+                            <td className="p-2">{trade.symbol}</td>
+                            <td className="p-2">
+                              <span
+                                className={`px-2 py-1 rounded text-xs ${
+                                  trade.side === "buy"
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {trade.side.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="p-2">
+                              ${trade.entryPrice.toFixed(2)}
+                            </td>
+                            <td className="p-2">
+                              ${trade.exitPrice?.toFixed(2) || "-"}
+                            </td>
+                            <td
+                              className={`p-2 ${(trade.pnl || 0) >= 0 ? "text-green-600" : "text-red-600"}`}
+                            >
+                              ${(trade.pnl || 0).toFixed(2)}
+                            </td>
+                            <td
+                              className={`p-2 ${(trade.pnlPercent || 0) >= 0 ? "text-green-600" : "text-red-600"}`}
+                            >
+                              {(trade.pnlPercent || 0).toFixed(1)}%
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
@@ -856,7 +988,11 @@ ${(trade.pnl || 0).toFixed(2)}
 
 // Dummy Card and CardContent components (replace with your actual components if available)
 function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full">{children}</div>;
+  return (
+    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full">
+      {children}
+    </div>
+  );
 }
 
 function CardHeader({ children }: { children: React.ReactNode }) {
@@ -864,13 +1000,16 @@ function CardHeader({ children }: { children: React.ReactNode }) {
 }
 
 function CardTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-2xl font-semibold leading-none tracking-tight">{children}</h3>;
+  return (
+    <h3 className="text-2xl font-semibold leading-none tracking-tight">
+      {children}
+    </h3>
+  );
 }
 
 function CardDescription({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>;
 }
-
 
 function CardContent({ children }: { children: React.ReactNode }) {
   return <div className="p-6 pt-0">{children}</div>;
