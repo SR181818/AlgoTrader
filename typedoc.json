@@ -1,7 +1,0 @@
-{
-  "entryPoints": ["src/trading/StrategyRunner.ts", "src/trading/RiskManager.ts"],
-  "out": "docs/api",
-  "exclude": ["**/__tests__/**", "**/*.test.ts"],
-  "includeVersion": true,
-  "tsconfig": "tsconfig.json"
-}
