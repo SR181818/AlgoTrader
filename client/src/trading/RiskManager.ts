@@ -1,4 +1,30 @@
 /**
+ * Risk configuration interface
+ */
+export interface RiskConfig {
+  maxRiskPerTrade: number;
+  maxDrawdown: number;
+  maxLeverage: number;
+  maxPositions: number;
+  dailyLossLimit: number;
+  emergencyStopLoss: number;
+  correlationLimit: number;
+}
+
+/**
+ * Risk metrics interface
+ */
+export interface RiskMetrics {
+  currentDrawdown: number;
+  dailyPnL: number;
+  openPositionsCount: number;
+  totalExposure: number;
+  riskPerTrade: number;
+  accountBalance: number;
+  lastResetTime: number;
+}
+
+/**
  * RiskManager enforces risk controls, calculates position sizing, and tracks risk metrics for trading operations.
  *
  * @remarks

@@ -2,7 +2,7 @@ import { Observable, Subject } from 'rxjs';
 import { CandleData } from '../types/trading';
 import { StrategyRunner, StrategySignal, StrategyConfig } from './StrategyRunner';
 import { OrderExecutor, OrderIntent, Order, ExecutorConfig } from './OrderExecutor';
-import { RiskManager, RiskConfig } from './RiskManager';
+import { RiskManager, RiskConfig, RiskMetrics } from './RiskManager';
 import Logger from '../utils/logger';
 
 export interface BacktestConfig {
@@ -215,7 +215,7 @@ export class Backtester {
 
           if (this.isRunning) {
             // Close any remaining open trades
-            for (const [tradeId, trade] of this.openTrades.entries()) {
+            for (const [tradeId, trade] of Array.from(this.openTrades.entries())) {
               const lastCandle = this.candles[this.candles.length - 1];
               if (lastCandle && lastCandle.close) {
                 this.closeTrade(tradeId, lastCandle.close, lastCandle.timestamp, 'end_of_backtest');

@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 // Import pages
 import TradingDashboardPage from './pages/TradingDashboardPage';
 import BacktestPage from './pages/BacktestPage';
+import ManualTradingPage from './pages/ManualTradingPage';
 import PortfolioDashboardPage from './pages/PortfolioDashboardPage';
 import IndicatorLibraryPage from './pages/IndicatorLibraryPage';
 import SettingsPage from './pages/SettingsPage';
@@ -101,6 +102,7 @@ function AppContent() {
                 <div className="flex items-center space-x-4">
                   <NavLink to="/dashboard" icon={<Activity size={18} />} text="Dashboard" />
                   <NavLink to="/backtest" icon={<Zap size={18} />} text="Backtest" />
+                  <NavLink to="/manual-trading" icon={<Globe size={18} />} text="Manual Trade" />
                   <NavLink to="/portfolio" icon={<BarChart3 size={18} />} text="Portfolio" />
                   <NavLink to="/indicators" icon={<Library size={18} />} text="Indicators" />
                   <NavLink to="/strategy-builder" icon={<Bot size={18} />} text="Strategy" />
@@ -138,6 +140,12 @@ function AppContent() {
         <Route path="/backtest">
           <ProtectedRoute>
             <BacktestPage />
+          </ProtectedRoute>
+        </Route>
+        
+        <Route path="/manual-trading">
+          <ProtectedRoute>
+            <ManualTradingPage />
           </ProtectedRoute>
         </Route>
         
