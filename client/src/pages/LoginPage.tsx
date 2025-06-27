@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
-import { User, Lock, Mail, AlertCircle } from 'lucide-react';
+import { User, Lock, Mail, AlertCircle, Wallet, BarChart3 } from 'lucide-react';
+import { WalletLogin } from '../components/WalletLogin';
 
 interface LoginPageProps {
   onLogin: () => void;
 }
 
 export default function LoginPage({ onLogin }: LoginPageProps) {
+  const [loginMethod, setLoginMethod] = useState<'traditional' | 'algorand'>('traditional');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
