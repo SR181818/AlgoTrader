@@ -1,4 +1,5 @@
 import { technicalIndicators, type OHLCV, calculateIndicators } from '../utils/technicalIndicators';
+import { CandleData } from '../types/trading';
 
 export interface Signal {
   type: 'BUY' | 'SELL' | 'HOLD';
@@ -6,6 +7,15 @@ export interface Signal {
   timestamp: number;
   price: number;
   indicators?: Record<string, number>;
+}
+
+export interface StrategySignal {
+  action: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  timestamp: number;
+  price: number;
+  indicators?: Record<string, number>;
+  reason?: string;
 }
 
 export interface StrategyConfig {
@@ -17,6 +27,8 @@ export interface StrategyConfig {
 export class StrategyRunner {
   private config: StrategyConfig;
   private data: OHLCV[] = [];
+  private currentCandle: CandleData | null = null;
+  private candleHistory: CandleData[] = [];
 
   constructor(config: StrategyConfig) {
     this.config = config;
@@ -25,6 +37,90 @@ export class StrategyRunner {
 
   setData(data: OHLCV[]): void {
     this.data = data;
+  }
+
+  updateCandle(candle: CandleData): void {
+    this.currentCandle = candle;
+    this.candleHistory.push(candle);
+    // Keep only the last 500 candles for performance
+    if (this.candleHistory.length > 500) {
+      this.candleHistory = this.candleHistory.slice(-500);
+    }
+  }
+
+  getCurrentIndicatorSignals(): Record<string, number> {
+    if (!this.currentCandle || this.candleHistory.length < 50) {
+      return {};
+    }
+
+    const closes = this.candleHistory.map(c => c.close);
+    const highs = this.candleHistory.map(c => c.high);
+    const lows = this.candleHistory.map(c => c.low);
+
+    try {
+      const rsi = technicalIndicators.RSI(closes, 14);
+      const macd = technicalIndicators.MACD(closes, 12, 26, 9);
+      const ema12 = technicalIndicators.EMA(closes, 12);
+      const ema26 = technicalIndicators.EMA(closes, 26);
+      const adx = technicalIndicators.ADX(highs, lows, closes, 14);
+
+      return {
+        RSI: rsi[rsi.length - 1] || 50,
+        MACD: macd.MACD[macd.MACD.length - 1] || 0,
+        MACD_Signal: macd.signal[macd.signal.length - 1] || 0,
+        EMA_12: ema12[ema12.length - 1] || closes[closes.length - 1],
+        EMA_26: ema26[ema26.length - 1] || closes[closes.length - 1],
+        ADX: adx[adx.length - 1] || 25
+      };
+    } catch (error) {
+      console.error('Error calculating indicators:', error);
+      return {};
+    }
+  }
+
+  getStrategySignals(): StrategySignal[] {
+    if (!this.currentCandle || this.candleHistory.length < 50) {
+      return [];
+    }
+
+    const signal = this.generateSignalFromCandles(this.candleHistory);
+    return [{
+      action: signal.type,
+      confidence: signal.strength,
+      timestamp: signal.timestamp,
+      price: signal.price,
+      indicators: signal.indicators,
+      reason: this.getSignalReason(signal)
+    }];
+  }
+
+  private getSignalReason(signal: Signal): string {
+    if (signal.type === 'BUY') {
+      return 'Multi-indicator confluence suggests bullish conditions';
+    } else if (signal.type === 'SELL') {
+      return 'Multi-indicator confluence suggests bearish conditions';
+    }
+    return 'No clear directional signal';
+  }
+
+  private generateSignalFromCandles(candles: CandleData[]): Signal {
+    const ohlcvData = candles.map(c => ({
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume
+    }));
+
+    return this.generateSignal(ohlcvData);
+  }
+
+  initializeIndicators(data: CandleData[]): void {
+    this.candleHistory = [...data];
+    if (data.length > 0) {
+      this.currentCandle = data[data.length - 1];
+    }
+    console.log(`Initialized strategy with ${data.length} candles`);
   }
 
   generateSignal(currentData: OHLCV[]): Signal {
