@@ -34,10 +34,13 @@ export default function ManualTradingPage() {
   const [balance, setBalance] = useState({ USDT: 10000, BTC: 0, ETH: 0 });
 
   useEffect(() => {
-    const subscription = marketData.subscribeToSymbol(selectedSymbol, (candle: CandleData) => {
-      setCurrentPrice(candle.close);
-      if (orderType === 'market' && !price) {
-        setPrice(candle.close.toString());
+    const subscription = marketData.subscribeToCandles(selectedSymbol, '1m').subscribe((candles: CandleData[]) => {
+      if (candles.length > 0) {
+        const latestCandle = candles[candles.length - 1];
+        setCurrentPrice(latestCandle.close);
+        if (orderType === 'market' && !price) {
+          setPrice(latestCandle.close.toString());
+        }
       }
     });
 
