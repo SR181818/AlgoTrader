@@ -1,4 +1,4 @@
-import { TechnicalIndicators, type OHLCVData, calculateIndicators } from '../utils/technicalIndicators';
+import { technicalIndicators, type OHLCV, calculateIndicators } from '../utils/technicalIndicators';
 
 export interface Signal {
   type: 'BUY' | 'SELL' | 'HOLD';
@@ -16,18 +16,18 @@ export interface StrategyConfig {
 
 export class StrategyRunner {
   private config: StrategyConfig;
-  private data: OHLCVData[] = [];
+  private data: OHLCV[] = [];
 
   constructor(config: StrategyConfig) {
     this.config = config;
     console.log(`Strategy set: ${config.name} v${config.version}`);
   }
 
-  setData(data: OHLCVData[]): void {
+  setData(data: OHLCV[]): void {
     this.data = data;
   }
 
-  generateSignal(currentData: OHLCVData[]): Signal {
+  generateSignal(currentData: OHLCV[]): Signal {
     if (currentData.length < 50) {
       return {
         type: 'HOLD',
@@ -43,14 +43,14 @@ export class StrategyRunner {
 
     try {
       // Calculate indicators
-      const rsi = TechnicalIndicators.rsi(closes, 14);
-      const macd = TechnicalIndicators.macd(closes, 12, 26, 9);
-      const ema12 = TechnicalIndicators.ema(closes, 12);
-      const ema26 = TechnicalIndicators.ema(closes, 26);
-      const adx = TechnicalIndicators.adx(highs, lows, closes, 14);
+      const rsi = technicalIndicators.RSI(closes, 14);
+      const macd = technicalIndicators.MACD(closes, 12, 26, 9);
+      const ema12 = technicalIndicators.EMA(closes, 12);
+      const ema26 = technicalIndicators.EMA(closes, 26);
+      const adx = technicalIndicators.ADX(highs, lows, closes, 14);
 
       const currentRSI = rsi[rsi.length - 1] || 50;
-      const currentMACD = macd.macd[macd.macd.length - 1] || 0;
+      const currentMACD = macd.MACD[macd.MACD.length - 1] || 0;
       const currentSignal = macd.signal[macd.signal.length - 1] || 0;
       const currentEMA12 = ema12[ema12.length - 1] || closes[closes.length - 1];
       const currentEMA26 = ema26[ema26.length - 1] || closes[closes.length - 1];
@@ -128,7 +128,7 @@ export class StrategyRunner {
     }
   }
 
-  backtest(data: OHLCVData[]): {
+  backtest(data: OHLCV[]): {
     signals: Signal[];
     performance: {
       totalTrades: number;
