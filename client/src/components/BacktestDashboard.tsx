@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Backtester, BacktestConfig, BacktestResult, BacktestProgress } from '../trading/Backtester';
 import { StrategyRunner } from '../trading/StrategyRunner';
 import { CandleData } from '../types/trading';
@@ -17,7 +17,7 @@ import {
   CheckCircle,
   Activity
 } from 'lucide-react';
-import { createChart, ColorType, LineStyle, type IChartApi } from 'lightweight-charts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface BacktestDashboardProps {
   onResultsGenerated?: (results: BacktestResult) => void;
@@ -98,91 +98,21 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     }
   }, [config, selectedStrategy]);
 
-  // Chart initialization effect
-  useEffect(() => {
-    if (!chartContainerRef.current || !results) return;
+  // Prepare chart data
+  const chartData = useMemo(() => {
+    if (!results?.trades) return [];
 
-    // Clear previous chart
-    chartContainerRef.current.innerHTML = '';
-
-    try {
-      const chartContainer = chartContainerRef.current; // reference to chart container
-      const chart = createChart(chartContainer, {
-          width: chartContainer.clientWidth,
-          height: 400,
-          layout: {
-            background: { type: ColorType.Solid, color: '#1a1a1a' },
-            textColor: '#ffffff',
-          },
-          grid: {
-            vertLines: { color: '#444' },
-            horzLines: { color: '#444' },
-          },
-          rightPriceScale: {
-            borderColor: '#444',
-          },
-          timeScale: {
-            borderColor: '#444',
-          },
-        });
-
-        // Add candlestick series
-        const candlestickSeries = chart.addCandlestickSeries({
-          upColor: '#00ff00',
-          downColor: '#ff0000',
-          borderDownColor: '#ff0000',
-          borderUpColor: '#00ff00',
-          wickDownColor: '#ff0000',
-          wickUpColor: '#00ff00',
-        });
-
-        // Add line series for equity curve
-        const equitySeries = chart.addAreaSeries({
-          topColor: 'rgba(33, 150, 243, 0.56)',
-          bottomColor: 'rgba(33, 150, 243, 0.04)',
-          lineColor: 'rgba(33, 150, 243, 1)',
-          lineWidth: 2,
-        });
-
-      const equityData = results.equity.map(point => ({
-        time: Math.floor(point.timestamp / 1000),
-        value: point.value,
-      }));
-
-      equitySeries.setData(equityData);
-
-      // Sample candlestick data (replace with your actual data)
-      const candleData = sampleData.map(candle => ({
-          time: Math.floor(candle.timestamp / 1000),
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-      }));
-      candlestickSeries.setData(candleData);
-      chart.timeScale().fitContent();
-
-      const handleResize = () => {
-        if (chartContainerRef.current && chart) {
-          chart.applyOptions({
-            width: chartContainerRef.current.clientWidth,
-          });
-        }
+    let equity = 10000;
+    return results.trades.map((trade, index) => {
+      equity += trade.pnl || 0;
+      return {
+        trade: index + 1,
+        equity: equity,
+        pnl: trade.pnl || 0,
+        date: new Date(trade.exitTime).toLocaleDateString()
       };
-
-      window.addEventListener('resize', handleResize);
-
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        if (chart && typeof chart.remove === 'function') {
-          chart.remove();
-        }
-      };
-    } catch (error) {
-      console.error('Error creating chart:', error);
-      setError(`Failed to create chart: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }, [results, sampleData]);
+    });
+  }, [results]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -761,7 +691,34 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div ref={chartContainerRef} className="w-full h-96" />
+              <div className="bg-gray-800 p-6 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4">Equity Curve</h3>
+                <div className="w-full h-96">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="trade" stroke="#d1d5db" />
+                      <YAxis stroke="#d1d5db" />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: '#1f2937', 
+                          border: '1px solid #374151', 
+                          borderRadius: '6px' 
+                        }}
+                      />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="equity" 
+                        stroke="#3b82f6" 
+                        strokeWidth={2}
+                        dot={false}
+                        name="Portfolio Value"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

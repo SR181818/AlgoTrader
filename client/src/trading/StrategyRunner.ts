@@ -1,4 +1,4 @@
-import { TechnicalIndicators, type OHLCVData } from '../utils/technicalIndicators';
+import { TechnicalIndicators, type OHLCVData, calculateIndicators } from '../utils/technicalIndicators';
 
 export interface Signal {
   type: 'BUY' | 'SELL' | 'HOLD';
