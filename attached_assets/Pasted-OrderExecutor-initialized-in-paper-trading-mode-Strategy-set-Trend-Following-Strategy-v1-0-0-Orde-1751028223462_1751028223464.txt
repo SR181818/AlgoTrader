@@ -1,0 +1,19 @@
+OrderExecutor initialized in paper trading mode
+Strategy set: Trend Following Strategy v1.0.0
+OrderExecutor initialized in paper trading mode
+Loaded 1000 valid candles for backtesting
+Starting backtest...
+Missing required indicators: EMA_12, EMA_26, ADX
+[BinanceMarketData] Initialized with real-time API
+Error creating chart: 
+TypeError {}
+message: "chart.addLineSeries is not a function"
+stack: "TypeError: chart.addLineSeries is not a function↵ at https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/src/components/BacktestDashboard.tsx:121:36↵ at commitHookEffectListMount (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:16915:34)↵ at commitPassiveMountOnFiber (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:18156:19)↵ at commitPassiveMountEffects_complete (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:18129:17)↵ at commitPassiveMountEffects_begin (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:18119:15)↵ at commitPassiveMountEffects (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:18109:11)↵ at flushPassiveEffectsImpl (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:19490:11)↵ at flushPassiveEffects (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:19447:22)↵ at https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:19328:17↵ at workLoop (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-4D4CFRWF.js?v=b2b17d63:197:42)"
+get stack: ƒ ()
+set stack: ƒ ()
+[[Prototype]]: Object
+
+at t.value (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://75a051e9-cbed-4016-a58e-4a4636c9f38e-00-24k34svxwioei.janeway.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
