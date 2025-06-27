@@ -17,7 +17,7 @@ import {
   CheckCircle,
   Activity
 } from 'lucide-react';
-import { createChart, ColorType, LineStyle, IChartApi } from 'lightweight-charts';
+import { createChart, ColorType, LineStyle, type IChartApi } from 'lightweight-charts';
 
 interface BacktestDashboardProps {
   onResultsGenerated?: (results: BacktestResult) => void;
