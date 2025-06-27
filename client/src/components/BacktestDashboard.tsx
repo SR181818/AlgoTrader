@@ -8,15 +8,11 @@ import {
 import { StrategyRunner } from "../trading/StrategyRunner";
 import { CandleData } from "../types/trading";
 import {
-  Play,
-  Pause,
-  Square,
   Upload,
   Download,
   BarChart3,
   TrendingUp,
   TrendingDown,
-  Clock,
   Target,
   AlertTriangle,
   CheckCircle,
@@ -71,107 +67,6 @@ export function BacktestDashboard({
       case "default":
       default:
         return StrategyRunner.createDefaultStrategy();
-    }
-  };
-
-  // Initialize backtester when config changes
-  useEffect(() => {
-    const initializeBacktester = async () => {
-      try {
-        if (config.startDate && config.endDate && config.initialBalance) {
-          const strategy = getStrategyByName(selectedStrategy);
-
-          const backtestConfig: BacktestConfig = {
-            startDate: config.startDate,
-            endDate: config.endDate,
-            initialBalance: config.initialBalance,
-            strategy: strategy,
-            riskConfig: {
-              maxRiskPerTrade: 0.02,
-              maxDrawdown: 0.05,
-              maxPositions: 5,
-              maxLeverage: 3,
-              emergencyStopLoss: 0.1,
-            },
-            executorConfig: {
-              paperTrading: true,
-              exchange: "binance",
-              testnet: true,
-              defaultOrderType: "market",
-              slippageTolerance: 0.1,
-              maxOrderSize: 1000,
-              enableStopLoss: true,
-              enableTakeProfit: true,
-              enablePartialFills: true,
-              orderTimeout: 30000,
-              retryAttempts: 3,
-              retryDelay: 1000,
-            },
-            replaySpeed: config.replaySpeed || 100,
-            commission: config.commission || 0.001,
-            slippage: config.slippage || 0.001,
-            symbol: config.symbol || "BTC/USDT",
-            timeframe: config.timeframe || "15m",
-            epochs: config.epochs || 100,
-          };
-
-          console.log("Initializing Backtester with config:", backtestConfig);
-          const newBacktester = new Backtester(backtestConfig);
-          setBacktester(newBacktester);
-          setError(null);
-
-          // Subscribe to progress updates
-          newBacktester.getProgressUpdates().subscribe(setProgress);
-
-          // Automatically run backtest when strategy or config changes
-          setTimeout(() => {
-            if (!isRunning) {
-              runBacktest();
-            }
-          }, 1000);
-        }
-      } catch (error) {
-        console.error("Failed to initialize Backtester:", error);
-        setError(`Failed to initialize backtester: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    };
-
-    initializeBacktester();
-
-    return () => {
-      if (backtester) {
-        backtester.dispose();
-      }
-    };
-  }, [config, selectedStrategy]);
-
-  // Prepare chart data
-  const chartData = useMemo(() => {
-    if (!results?.trades) return [];
-
-    let equity = 10000;
-    return results.trades.map((trade: any, index: number) => {
-      equity += trade.pnl || 0;
-      return {
-        trade: index + 1,
-        equity: equity,
-        pnl: trade.pnl || 0,
-        date: new Date(trade.exitTime).toLocaleDateString(),
-      };
-    });
-  }, [results]);
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const csv = e.target?.result as string;
-        setCsvData(csv);
-        setSampleDataGenerated(false);
-        setSampleData([]);
-      };
-      reader.readAsText(file);
     }
   };
 
@@ -240,10 +135,10 @@ export function BacktestDashboard({
     return data;
   };
 
-  const runBacktest = async () => {
-    console.log("runBacktest called, backtester:", backtester);
-    if (!backtester) {
-      console.error("Backtester is null or undefined");
+  const runBacktestWithInstance = async (backtesterInstance: Backtester) => {
+    console.log("Running backtest with instance:", backtesterInstance);
+    if (!backtesterInstance) {
+      console.error("Backtester instance is null or undefined");
       setError("Backtester not initialized - please wait for initialization to complete");
       return;
     }
@@ -272,10 +167,10 @@ export function BacktestDashboard({
       }
 
       // Load data into backtester
-      backtester.loadData(dataToUse);
+      backtesterInstance.loadData(dataToUse);
 
       // Run backtest
-      const result = await backtester.startBacktest();
+      const result = await backtesterInstance.startBacktest();
 
       setResults(result);
 
@@ -293,24 +188,106 @@ export function BacktestDashboard({
     }
   };
 
-  const pauseBacktest = () => {
-    if (backtester) {
-      if (isPaused) {
-        backtester.resume();
-        setIsPaused(false);
-      } else {
-        backtester.pause();
-        setIsPaused(true);
-      }
-    }
-  };
+  // Initialize backtester when config changes
+  useEffect(() => {
+    const initializeBacktester = async () => {
+      try {
+        if (config.startDate && config.endDate && config.initialBalance) {
+          const strategy = getStrategyByName(selectedStrategy);
 
-  const stopBacktest = () => {
-    if (backtester) {
-      backtester.stop();
-      setIsRunning(false);
-      setIsPaused(false);
-      setProgress(null);
+          const backtestConfig: BacktestConfig = {
+            startDate: config.startDate,
+            endDate: config.endDate,
+            initialBalance: config.initialBalance,
+            strategy: strategy,
+            riskConfig: {
+              maxRiskPerTrade: 0.02,
+              maxDrawdown: 0.05,
+              maxPositions: 5,
+              maxLeverage: 3,
+              emergencyStopLoss: 0.1,
+              dailyLossLimit: 0.1,
+              correlationLimit: 0.8,
+            },
+            executorConfig: {
+              paperTrading: true,
+              exchange: "binance",
+              testnet: true,
+              defaultOrderType: "market",
+              slippageTolerance: 0.1,
+              maxOrderSize: 1000,
+              enableStopLoss: true,
+              enableTakeProfit: true,
+              enablePartialFills: true,
+              orderTimeout: 30000,
+              retryAttempts: 3,
+              retryDelay: 1000,
+            },
+            replaySpeed: config.replaySpeed || 100,
+            commission: config.commission || 0.001,
+            slippage: config.slippage || 0.001,
+            symbol: config.symbol || "BTC/USDT",
+            timeframe: config.timeframe || "15m",
+            epochs: config.epochs || 100,
+          };
+
+          console.log("Initializing Backtester with config:", backtestConfig);
+          const newBacktester = new Backtester(backtestConfig);
+          
+          // Set the backtester in state
+          setBacktester(newBacktester);
+          setError(null);
+
+          // Subscribe to progress updates
+          newBacktester.getProgressUpdates().subscribe(setProgress);
+
+          // Automatically run backtest when strategy or config changes
+          setTimeout(async () => {
+            await runBacktestWithInstance(newBacktester);
+          }, 1000);
+        }
+      } catch (error) {
+        console.error("Failed to initialize Backtester:", error);
+        setError(`Failed to initialize backtester: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    initializeBacktester();
+
+    return () => {
+      if (backtester) {
+        backtester.dispose();
+      }
+    };
+  }, [config, selectedStrategy]);
+
+  // Prepare chart data
+  const chartData = useMemo(() => {
+    if (!results?.trades) return [];
+
+    let equity = 10000;
+    return results.trades.map((trade: any, index: number) => {
+      equity += trade.pnl || 0;
+      return {
+        trade: index + 1,
+        equity: equity,
+        pnl: trade.pnl || 0,
+        date: new Date(trade.exitTime).toLocaleDateString(),
+      };
+    });
+  }, [results]);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const csv = e.target?.result as string;
+        setCsvData(csv);
+        setSampleDataGenerated(false);
+        setSampleData([]);
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -479,12 +456,12 @@ export function BacktestDashboard({
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Progress</span>
-              <span>{(progress.progressPercent * 100).toFixed(1)}%</span>
+              <span>{progress.progress.toFixed(1)}%</span>
             </div>
             <div className="w-full bg-gray-700 rounded-full h-2">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progress.progressPercent * 100}%` }}
+                style={{ width: `${progress.progress}%` }}
               />
             </div>
             <div className="grid grid-cols-3 gap-4 text-sm text-gray-400 mt-4">
