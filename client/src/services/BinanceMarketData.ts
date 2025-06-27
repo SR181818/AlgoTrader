@@ -1,6 +1,5 @@
-import { BehaviorSubject, Observable, interval } from 'rxjs';
+import { BehaviorSubject, Observable, interval, of } from 'rxjs';
 import { switchMap, catchError } from 'rxjs/operators';
-import { of } from 'rxjs';
 
 export interface CandleData {
   timestamp: number;
@@ -199,16 +198,16 @@ export class BinanceMarketData {
       
       this.tickerSubjects.set(key, subject);
       
-      // Start polling for updates
-      interval(this.updateInterval).pipe(
-        switchMap(() => this.getTicker(symbol)),
-        catchError(error => {
+      // Start polling for updates using setInterval
+      setInterval(async () => {
+        try {
+          const ticker = await this.getTicker(symbol);
+          subject.next(ticker);
+        } catch (error) {
           console.error(`[BinanceMarketData] Ticker update error for ${symbol}:`, error);
-          return of(subject.value); // Return last known value on error
-        })
-      ).subscribe(ticker => {
-        subject.next(ticker);
-      });
+          // Keep the last known value on error
+        }
+      }, this.updateInterval);
     }
     
     return this.tickerSubjects.get(key)!.asObservable();
@@ -224,16 +223,16 @@ export class BinanceMarketData {
       const subject = new BehaviorSubject<CandleData[]>([]);
       this.candleSubjects.set(key, subject);
       
-      // Start polling for updates
-      interval(this.updateInterval * 5).pipe( // Update candles every 5 seconds
-        switchMap(() => this.getKlines(symbol, interval, 100)),
-        catchError(error => {
+      // Start polling for updates using setInterval - update candles every 10 seconds
+      setInterval(async () => {
+        try {
+          const candles = await this.getKlines(symbol, interval, 100);
+          subject.next(candles);
+        } catch (error) {
           console.error(`[BinanceMarketData] Candle update error for ${symbol}:`, error);
-          return of(subject.value); // Return last known value on error
-        })
-      ).subscribe(candles => {
-        subject.next(candles);
-      });
+          // Keep the last known value on error
+        }
+      }, this.updateInterval * 5);
     }
     
     return this.candleSubjects.get(key)!.asObservable();

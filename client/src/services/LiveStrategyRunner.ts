@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, combineLatest, interval } from 'rxjs';
+import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
 import { map, filter, distinctUntilChanged } from 'rxjs/operators';
 import { binanceMarketData, CandleData, TickerData } from './BinanceMarketData';
 
@@ -82,12 +82,12 @@ export class LiveStrategyRunner {
       }
     );
 
-    // Run analysis every 5 seconds
-    interval(5000).subscribe(() => {
+    // Run analysis every 5 seconds using setInterval
+    setInterval(() => {
       if (this.isRunning && this.candles.length > 0) {
         this.analyzeMarket();
       }
-    });
+    }, 5000);
   }
 
   /**
