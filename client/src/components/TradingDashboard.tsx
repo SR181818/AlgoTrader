@@ -60,7 +60,10 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
   const [manualOrderAmount, setManualOrderAmount] = useState(0.001);
   const [manualOrderSide, setManualOrderSide] = useState<'buy' | 'sell'>('buy');
   const [isExecutingOrder, setIsExecutingOrder] = useState(false);
-  
+  const [manualTrades, setManualTrades] = useState<Trade[]>([]);
+  const [livePnL, setLivePnL] = useState(0);
+  const [currentPrice, setCurrentPrice] = useState(0);
+
   // Trading bot configuration
   const tradingBotConfig: TradingBotConfig = {
     exchange: 'binance',
@@ -73,7 +76,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     stopLossPercent: 0.02,
     takeProfitPercent: 0.04
   };
-  
+
   // Get metrics hook
   const { 
     recordSignal, 
@@ -90,13 +93,13 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         setSystemHealth(true); // Update system health status
       } else if (update.type === 'candle_data') {
         setCandleData(update.data);
-        
+
         // Record candle data for metrics
         if (update.data.length > 0) {
           const latestCandle = update.data[update.data.length - 1];
           const latencyMs = Date.now() - latestCandle.timestamp;
           recordCandleData(symbol, timeframe, 'realtime', latestCandle, latencyMs);
-          
+
           // Update strategy with new candle when live trading is enabled
           if (isLiveTrading) {
             strategyRunner.updateCandle(latestCandle);
@@ -106,7 +109,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     };
 
     realDataService.subscribe(symbol, timeframe, handleDataUpdate);
-    
+
     return () => {
       realDataService.unsubscribe(symbol, timeframe, handleDataUpdate);
     };
@@ -116,7 +119,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
   useEffect(() => {
     const subscription = strategyRunner.getStrategySignals().subscribe(signal => {
       setStrategySignals(prev => [signal, ...prev.slice(0, 99)]);
-      
+
       // Record signal metrics
       const startTime = performance.now();
       const latencyMs = performance.now() - startTime;
@@ -132,7 +135,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         indicators: {} as any,
         reasoning: signal.reasoning
       }, latencyMs);
-      
+
       // Execute trade if live trading is enabled
       if (isLiveTrading && signal.type !== 'HOLD') {
         handleStrategySignal(signal);
@@ -169,10 +172,10 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
       try {
         // Load from localStorage (legacy format)
         const storedOrders = JSON.parse(localStorage.getItem('manualTradingOrders') || '[]');
-        
+
         // Load from ManualTradingService (new format)
         const manualTrades = manualTradingService.getCurrentTrades();
-        
+
         // Convert manual trades to order format
         const manualOrders = manualTrades.map((trade: any) => ({
           id: trade.id,
@@ -198,7 +201,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
             }
           }
         }));
-        
+
         // Merge legacy orders with new manual orders
         const legacyOrders = storedOrders.map((order: any) => ({
           ...order,
@@ -224,9 +227,9 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
             }
           }
         }));
-        
+
         const allManualOrders = [...manualOrders, ...legacyOrders];
-        
+
         setOrders(prev => {
           // Merge manual orders with existing strategy orders, avoiding duplicates
           const existingIds = new Set(prev.map(o => o.id));
@@ -261,13 +264,68 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     };
   }, []);
 
+  useEffect(() => {
+    // Load manual trades and calculate PnL
+    const loadManualTrades = async () => {
+      try {
+        const trades = await manualTradingService.getTrades();
+        setManualTrades(trades);
+
+        const total = trades.reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+        setTotalPnL(total);
+
+        const today = new Date().toDateString();
+        const todaysTotal = trades
+          .filter(trade => new Date(trade.timestamp).toDateString() === today)
+          .reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+        setDailyPnL(todaysTotal);
+
+        // Calculate live PnL for open positions
+        if (currentPrice > 0) {
+          const openTrades = trades.filter(trade => trade.status === 'open');
+          const unrealizedPnL = openTrades.reduce((sum, trade) => {
+            if (trade.side === 'buy') {
+              return sum + ((currentPrice - trade.entryPrice) * trade.quantity);
+            } else {
+              return sum + ((trade.entryPrice - currentPrice) * trade.quantity);
+            }
+          }, 0);
+          setLivePnL(total + unrealizedPnL);
+        }
+      } catch (error) {
+        console.error('Failed to load manual trades:', error);
+      }
+    };
+
+    // Get current price updates
+    const updateCurrentPrice = async () => {
+      try {
+        const ticker = await realDataService.getCurrentPrice('BTC/USDT');
+        setCurrentPrice(ticker.last);
+      } catch (error) {
+        console.error('Failed to get current price:', error);
+      }
+    };
+
+    loadManualTrades();
+    updateCurrentPrice();
+
+    const tradesInterval = setInterval(loadManualTrades, 5000);
+    const priceInterval = setInterval(updateCurrentPrice, 2000);
+
+    return () => {
+      clearInterval(tradesInterval);
+      clearInterval(priceInterval);
+    };
+  }, [currentPrice]);
+
   const handleStrategySignal = async (signal: StrategySignal) => {
     try {
       if (!marketData) {
         setError("Cannot execute trade: No market data available");
         return;
       }
-      
+
       // Risk assessment
       const riskAssessment = riskManager.assessTradeRisk(
         signal.metadata.symbol || symbol,
@@ -297,7 +355,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
       };
 
       const order = await orderExecutor.executeOrder(orderIntent);
-      
+
       // Record trade metrics
       recordTrade({
         id: order.id,
@@ -319,7 +377,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         entry_time: Date.now(),
         size: order.executedAmount * order.executedPrice
       });
-      
+
       setError(null);
     } catch (error) {
       console.error('Failed to execute trade:', error);
@@ -342,7 +400,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         setError(`Position not found for ${symbol}`);
         return;
       }
-      
+
       // Create a signal for closing the position
       const closeSignal: StrategySignal = {
         type: position.side === 'long' ? 'SHORT' : 'LONG', // Opposite direction to close
@@ -359,7 +417,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
           exitConditions: ['Manual close']
         }
       };
-      
+
       // Execute order to close position
       const orderIntent = {
         id: `close_${Date.now()}`,
@@ -370,7 +428,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         price: position.currentPrice,
         timestamp: Date.now()
       };
-      
+
       await orderExecutor.executeOrder(orderIntent);
       setError(null);
     } catch (error) {
@@ -387,7 +445,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
       }
 
       setIsExecutingOrder(true);
-      
+
       // Create a signal for manual order
       const manualSignal: StrategySignal = {
         type: manualOrderSide === 'buy' ? 'LONG' : 'SHORT',
@@ -404,7 +462,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
           exitConditions: []
         }
       };
-      
+
       // Execute order
       const orderIntent = {
         id: `manual_${Date.now()}`,
@@ -415,10 +473,10 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         price: marketData.price,
         timestamp: Date.now()
       };
-      
+
       const order = await orderExecutor.executeOrder(orderIntent);
       console.log('Manual order executed:', order);
-      
+
       // Record trade metrics
       recordTrade({
         id: order.id,
@@ -440,7 +498,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
         entry_time: Date.now(),
         size: order.executedAmount * order.executedPrice
       });
-      
+
       setError(null);
     } catch (error) {
       console.error('Failed to execute manual order:', error);
@@ -453,18 +511,18 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
   // Calculate total PnL including positions and manual trading
   const positionsPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
   const currentPnL = positionsPnL + manualTradingPnL;
-  
+
   // Update daily PnL to include manual trading changes
   useEffect(() => {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    
+
     // Calculate daily change in manual trading PnL
     const manualTrades = manualTradingService.getCurrentTrades();
     const todayManualPnL = manualTrades
       .filter(trade => trade.timestamp >= startOfDay.getTime() && trade.status === 'filled')
       .reduce((sum, trade) => sum + (trade.pnl || 0), 0);
-    
+
     setDailyPnL(todayManualPnL + positionsPnL);
   }, [manualTradingPnL, positionsPnL]);
 
@@ -516,7 +574,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
           <div className="text-sm text-gray-400">
             Timeframe: <span className="text-white font-mono">{timeframe}</span>
           </div>
-          
+
           <button
             onClick={() => setShowTradingBot(!showTradingBot)}
             className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors ml-auto"
@@ -525,7 +583,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
             {showTradingBot ? 'Hide Trading Bot' : 'Show Trading Bot'}
           </button>
         </div>
-        
+
         {/* Manual Order Form */}
         <div className="mt-4 pt-4 border-t border-gray-700">
           <h3 className="text-lg font-semibold text-white mb-3">Manual Order Execution</h3>
@@ -569,7 +627,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
             </div>
           </div>
         </div>
-        
+
         {error && (
           <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-start">
             <AlertTriangle className="text-red-400 mt-0.5 mr-3 flex-shrink-0" size={18} />
@@ -592,18 +650,28 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* P&L and Positions */}
         <div className="xl:col-span-2 space-y-6">
-          <PnLGauge 
-            currentPnL={currentPnL}
-            dailyPnL={dailyPnL}
-            totalPnL={totalPnL}
-            accountBalance={accountBalance}
-          />
-          
+          {/* PnL Gauge */}
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <PnLGauge 
+              totalPnL={livePnL > 0 ? livePnL : totalPnL}
+              dailyPnL={dailyPnL}
+              accountBalance={accountBalance}
+            />
+            {currentPrice > 0 && (
+              <div className="mt-4 text-sm text-gray-400">
+                <div>Current Price: ${currentPrice.toFixed(2)}</div>
+                <div>Live P&L: <span className={livePnL >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  ${livePnL.toFixed(2)}
+                </span></div>
+              </div>
+            )}
+          </div>
+
           <OpenPositionsTable 
             positions={positions}
             onClosePosition={handleClosePosition}
           />
-          
+
           {/* Orders Table */}
           <div className="bg-gray-800 rounded-lg border border-gray-700">
             <div className="p-4 border-b border-gray-700">
@@ -612,7 +680,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
                 {orders.length} order{orders.length !== 1 ? 's' : ''}
               </div>
             </div>
-            
+
             <div className="overflow-x-auto">
               {orders.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">

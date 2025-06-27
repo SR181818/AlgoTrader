@@ -98,68 +98,72 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     }
   }, [config, selectedStrategy]);
 
-  // Create chart when container is ready
+  // Chart initialization effect
   useEffect(() => {
-    if (chartContainerRef.current && results) {
-      try {
-        // Clear any existing chart
-        chartContainerRef.current.innerHTML = '';
+    if (!chartContainerRef.current || !results) return;
 
-        const chart = createChart(chartContainerRef.current, {
-          width: chartContainerRef.current.clientWidth,
-          height: 400,
-          layout: {
-            background: { type: ColorType.Solid, color: '#1f2937' },
-            textColor: '#ffffff',
-          },
-          grid: {
-            vertLines: { color: '#374151' },
-            horzLines: { color: '#374151' },
-          },
-          timeScale: {
-            timeVisible: true,
-            secondsVisible: false,
-          },
-        });
+    // Clear previous chart
+    chartContainerRef.current.innerHTML = '';
 
-        // Add equity line series
-        const equityLineSeries = chart.addLineSeries({
-          color: '#3b82f6',
-          lineWidth: 2,
-          title: 'Portfolio Equity',
-        });
+    try {
+      const chart = createChart(chartContainerRef.current, {
+        width: chartContainerRef.current.clientWidth,
+        height: 400,
+        layout: {
+          background: { type: ColorType.Solid, color: '#1a1a1a' },
+          textColor: '#ffffff',
+        },
+        grid: {
+          vertLines: { color: '#444' },
+          horzLines: { color: '#444' },
+        },
+        rightPriceScale: {
+          borderColor: '#444',
+        },
+        timeScale: {
+          borderColor: '#444',
+        },
+      });
 
-        // Prepare chart data
-        const chartData = results.equity
-          .filter(point => point.timestamp && point.value)
-          .map(point => ({
-            time: Math.floor(point.timestamp / 1000) as any, // Convert to seconds
-            value: point.value,
-          }))
-          .sort((a, b) => a.time - b.time);
-
-        if (chartData.length > 0) {
-          equityLineSeries.setData(chartData);
-          chart.timeScale().fitContent();
-        }
-
-        // Handle resize
-        const resizeObserver = new ResizeObserver(() => {
-          if (chartContainerRef.current) {
-            chart.resize(chartContainerRef.current.clientWidth, 400);
-          }
-        });
-
-        resizeObserver.observe(chartContainerRef.current);
-
-        return () => {
-          resizeObserver.disconnect();
-          chart.remove();
-        };
-      } catch (error) {
-        console.error('Error creating chart:', error);
-        setError('Failed to create equity curve chart: ' + (error as Error).message);
+      // Ensure chart is properly initialized
+      if (!chart || typeof chart.addLineSeries !== 'function') {
+        console.error('Chart not properly initialized');
+        setError('Chart initialization failed');
+        return;
       }
+
+      const lineSeries = chart.addLineSeries({
+        color: '#2563eb',
+        lineWidth: 2,
+      });
+
+      const equityData = results.equity.map(point => ({
+        time: Math.floor(point.timestamp / 1000),
+        value: point.value,
+      }));
+
+      lineSeries.setData(equityData);
+      chart.timeScale().fitContent();
+
+      const handleResize = () => {
+        if (chartContainerRef.current && chart) {
+          chart.applyOptions({
+            width: chartContainerRef.current.clientWidth,
+          });
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
+
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        if (chart && typeof chart.remove === 'function') {
+          chart.remove();
+        }
+      };
+    } catch (error) {
+      console.error('Error creating chart:', error);
+      setError(`Failed to create chart: ${error instanceof Error ? error.message : String(error)}`);
     }
   }, [results]);
 
@@ -820,7 +824,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
                   <span className="text-red-600">{results.consecutiveLosses}</span>
                 </div>
               </CardContent>
-            </Card>
+            </            </Card>
           </div>
 
           {/* Recent Trades */}

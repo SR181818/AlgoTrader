@@ -1100,11 +1100,6 @@ export class StrategyRunner {
     }
   }
 
-  updateIndicatorSignal(name: string, signal: any): void {
-    this.indicatorSignals.set(name, signal);
-    this.evaluateStrategy();
-  }
-
   // Method to initialize required indicators
   initializeIndicators(candles: CandleData[]): void {
     if (candles.length < 50) return;
@@ -1114,10 +1109,12 @@ export class StrategyRunner {
 
       // Set all calculated indicators
       Object.entries(indicators).forEach(([name, indicator]) => {
-        this.updateIndicatorSignal(name, {
-          values: indicator.values,
-          signals: indicator.signals
-        });
+        if (indicator.values && indicator.values.length > 0) {
+          this.updateIndicatorSignal(name, {
+            values: indicator.values,
+            signals: indicator.signals || ['neutral']
+          });
+        }
       });
     }).catch(error => {
       console.warn('Failed to initialize indicators:', error);
