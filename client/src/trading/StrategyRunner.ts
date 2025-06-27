@@ -106,16 +106,16 @@ export class StrategyRunner {
   private currentStrategy: StrategyConfig | null = null;
   private context: StrategyContext;
   private performance: StrategyPerformance;
-  
+
   // Signal rate limiting
   private lastSignalTime = 0;
   private signalCount = 0;
   private signalCountResetTime = Date.now();
-  
+
   // Candle history for context
   private candleHistory: CandleData[] = [];
   private maxHistoryLength = 200;
-  
+
   // Signal history
   private signalHistory: StrategySignal[] = [];
   private maxSignalHistory = 100;
@@ -133,7 +133,7 @@ export class StrategyRunner {
       marketCondition: 'unknown',
       sessionTime: 'quiet'
     };
-    
+
     this.performance = {
       totalSignals: 0,
       signalsByType: { LONG: 0, SHORT: 0, HOLD: 0 },
@@ -145,7 +145,7 @@ export class StrategyRunner {
     if (strategy) {
       this.setStrategy(strategy);
     }
-    
+
     this.setupSignalGeneration();
   }
 
@@ -167,10 +167,10 @@ export class StrategyRunner {
     if (this.candleHistory.length > this.maxHistoryLength) {
       this.candleHistory.shift();
     }
-    
+
     // Update context
     this.updateContext(candle);
-    
+
     // Emit candle update
     this.candleSubject.next(candle);
   }
@@ -352,7 +352,7 @@ export class StrategyRunner {
 
     // Calculate strength based on confidence
     const strength = this.calculateSignalStrength('strategy', confidence);
-    
+
     // Calculate stop loss and take profit
     const stopLoss = this.calculateStopLoss(candle.close, signalType, signals);
     const takeProfit = this.calculateTakeProfit(candle.close, signalType, stopLoss);
@@ -394,12 +394,12 @@ export class StrategyRunner {
     if (filters.timeFilters.length > 0) {
       const currentTime = new Date(candle.timestamp);
       const timeString = currentTime.toTimeString().substring(0, 5); // HH:MM format
-      
+
       const inTimeWindow = filters.timeFilters.some(timeFilter => {
         const [start, end] = timeFilter.split('-');
         return timeString >= start && timeString <= end;
       });
-      
+
       if (!inTimeWindow) return false;
     }
 
@@ -434,7 +434,7 @@ export class StrategyRunner {
    */
   private calculateSignalStrength(indicatorOrType: string, confidenceOrValue: number | any): SignalStrength {
     let confidence: number;
-    
+
     if (typeof indicatorOrType === 'string' && indicatorOrType === 'strategy') {
       confidence = confidenceOrValue;
     } else if (typeof confidenceOrValue === 'number') {
@@ -502,13 +502,13 @@ export class StrategyRunner {
             price + (atr.value * atrMultiplier);
         }
         break;
-      
+
       case 'percentage':
         const stopLossPercent = this.currentStrategy.parameters.stopLossPercent || 0.02;
         return signalType === 'LONG' ? 
           price * (1 - stopLossPercent) :
           price * (1 + stopLossPercent);
-      
+
       case 'support_resistance':
         // Simplified support/resistance calculation
         if (this.candleHistory.length >= 20) {
@@ -522,7 +522,7 @@ export class StrategyRunner {
           }
         }
         break;
-      
+
       case 'dynamic':
         // Dynamic stop loss based on volatility and trend
         const volatility = this.calculateVolatility();
@@ -553,13 +553,13 @@ export class StrategyRunner {
         return signalType === 'LONG' ? 
           price + (riskAmount * ratio) :
           price - (riskAmount * ratio);
-      
+
       case 'trailing':
         // Initial take profit, would be adjusted dynamically in practice
         return signalType === 'LONG' ? 
           price + (riskAmount * 1.5) :
           price - (riskAmount * 1.5);
-      
+
       case 'resistance':
         if (this.candleHistory.length >= 20) {
           const recentCandles = this.candleHistory.slice(-20);
@@ -572,7 +572,7 @@ export class StrategyRunner {
           }
         }
         break;
-      
+
       case 'dynamic':
         const dynamicRatio = this.calculateDynamicRiskReward();
         return signalType === 'LONG' ? 
@@ -642,15 +642,15 @@ export class StrategyRunner {
 
     const recentCandles = this.candleHistory.slice(-20);
     const prices = recentCandles.map(c => c.close);
-    
+
     // Calculate trend strength
     const firstPrice = prices[0];
     const lastPrice = prices[prices.length - 1];
     const trendPercent = Math.abs((lastPrice - firstPrice) / firstPrice);
-    
+
     // Calculate volatility
     const volatility = this.calculateVolatility();
-    
+
     if (volatility > 0.03) return 'volatile'; // 3% volatility
     if (trendPercent > 0.02) return 'trending'; // 2% trend
     return 'ranging';
@@ -662,7 +662,7 @@ export class StrategyRunner {
   private detectSessionTime(timestamp: number): 'asian' | 'london' | 'newyork' | 'overlap' | 'quiet' {
     const date = new Date(timestamp);
     const utcHour = date.getUTCHours();
-    
+
     // Simplified session detection (UTC hours)
     if (utcHour >= 0 && utcHour < 8) return 'asian';
     if (utcHour >= 8 && utcHour < 12) return 'overlap'; // London-Asian overlap
@@ -680,15 +680,15 @@ export class StrategyRunner {
 
     const recentCandles = this.candleHistory.slice(-20);
     const returns = [];
-    
+
     for (let i = 1; i < recentCandles.length; i++) {
       const returnValue = (recentCandles[i].close - recentCandles[i-1].close) / recentCandles[i-1].close;
       returns.push(returnValue);
     }
-    
+
     const mean = returns.reduce((sum, r) => sum + r, 0) / returns.length;
     const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
-    
+
     return Math.sqrt(variance);
   }
 
@@ -698,7 +698,7 @@ export class StrategyRunner {
   private calculateDynamicRiskReward(): number {
     const volatility = this.calculateVolatility();
     const baseRatio = this.currentStrategy?.riskRewardRatio || 2;
-    
+
     // Adjust ratio based on volatility
     if (volatility > 0.03) return baseRatio * 0.8; // Reduce in high volatility
     if (volatility < 0.01) return baseRatio * 1.2; // Increase in low volatility
@@ -712,11 +712,11 @@ export class StrategyRunner {
     this.performance.totalSignals++;
     this.performance.signalsByType[signal.type]++;
     this.performance.lastSignalTime = signal.timestamp;
-    
+
     // Update average confidence
     const totalConfidence = this.performance.averageConfidence * (this.performance.totalSignals - 1) + signal.confidence;
     this.performance.averageConfidence = totalConfidence / this.performance.totalSignals;
-    
+
     // Calculate signals per hour
     const hourInMs = 60 * 60 * 1000;
     const recentSignals = this.signalHistory.filter(s => 
@@ -793,13 +793,13 @@ export class StrategyRunner {
           evaluate: (signals, candle, context) => {
             const ema20 = signals.find(s => s.name === 'EMA_20');
             const ema50 = signals.find(s => s.name === 'EMA_50');
-            
+
             if (!ema20 || !ema50) {
               return { signal: 'neutral', confidence: 0, reasoning: 'EMA data unavailable' };
             }
 
             let ema20Value: number, ema50Value: number;
-            
+
             if (typeof ema20.value === 'number') {
               ema20Value = ema20.value;
             } else if (Array.isArray(ema20.value) && ema20.value.length > 0) {
@@ -807,7 +807,7 @@ export class StrategyRunner {
             } else {
               return { signal: 'neutral', confidence: 0, reasoning: 'EMA20 data invalid' };
             }
-            
+
             if (typeof ema50.value === 'number') {
               ema50Value = ema50.value;
             } else if (Array.isArray(ema50.value) && ema50.value.length > 0) {
@@ -838,7 +838,7 @@ export class StrategyRunner {
           enabled: true,
           evaluate: (signals, candle, context) => {
             const rsi = signals.find(s => s.name === 'RSI');
-            
+
             if (!rsi || typeof rsi.value !== 'number') {
               return { signal: 'neutral', confidence: 0, reasoning: 'RSI data unavailable' };
             }
@@ -865,7 +865,7 @@ export class StrategyRunner {
           enabled: true,
           evaluate: (signals, candle, context) => {
             const macd = signals.find(s => s.name === 'MACD');
-            
+
             if (!macd || typeof macd.value !== 'object' || !macd.value) {
               return { signal: 'neutral', confidence: 0, reasoning: 'MACD data unavailable' };
             }
@@ -876,8 +876,7 @@ export class StrategyRunner {
             const histogram = macdValue.histogram;
 
             if (macdLine && signalLine && histogram !== undefined) {
-              if (macdLine > signalLine && histogram > 0) {
-                const strength = Math.min(Math.abs(histogram) / Math.abs(macdLine), 1);
+              if (macdLine > signalLine && histogram > 0) {                const strength = Math.min(Math.abs(histogram) / Math.abs(macdLine), 1);
                 return { signal: 'buy', confidence: 0.6 + (strength * 0.3), reasoning: 'MACD bullish crossover with positive histogram' };
               } else if (macdLine < signalLine && histogram < 0) {
                 const strength = Math.min(Math.abs(histogram) / Math.abs(macdLine), 1);
@@ -897,7 +896,7 @@ export class StrategyRunner {
           enabled: true,
           evaluate: (signals, candle, context) => {
             const bb = signals.find(s => s.name === 'BBANDS');
-            
+
             if (!bb || typeof bb.value !== 'object' || !bb.value) {
               return { signal: 'neutral', confidence: 0, reasoning: 'Bollinger Bands data unavailable' };
             }
@@ -910,7 +909,7 @@ export class StrategyRunner {
 
             if (upper && lower && middle) {
               const bandWidth = (upper - lower) / middle;
-              
+
               // Only trade when bands are not too wide (avoid trending markets)
               if (bandWidth < 0.04) { // 4% band width
                 if (currentPrice <= lower * 1.001) { // Price at or below lower band
@@ -938,9 +937,9 @@ export class StrategyRunner {
 
             const avgVolume = context.previousCandles.slice(-10)
               .reduce((sum, c) => sum + c.volume, 0) / 10;
-            
+
             const volumeRatio = candle.volume / avgVolume;
-            
+
             if (volumeRatio > 1.5) {
               return { signal: 'buy', confidence: 0.7, reasoning: `High volume confirmation (${volumeRatio.toFixed(1)}x average)` };
             } else if (volumeRatio > 1.2) {
@@ -1018,7 +1017,7 @@ export class StrategyRunner {
           evaluate: (signals, candle, context) => {
             const emaFast = signals.find(s => s.name === 'EMA_12');
             const emaSlow = signals.find(s => s.name === 'EMA_26');
-            
+
             if (!emaFast || !emaSlow || typeof emaFast.value !== 'number' || typeof emaSlow.value !== 'number') {
               return { signal: 'neutral', confidence: 0, reasoning: 'EMA data unavailable' };
             }
@@ -1028,7 +1027,7 @@ export class StrategyRunner {
               const prevCandle = context.previousCandles[context.previousCandles.length - 1];
               // In a real implementation, you'd track previous EMA values
               // For now, just check current relationship
-              
+
               if (emaFast.value > emaSlow.value) {
                 return { signal: 'buy', confidence: 0.8, reasoning: 'Fast EMA above slow EMA - uptrend' };
               } else {
@@ -1048,7 +1047,7 @@ export class StrategyRunner {
           enabled: true,
           evaluate: (signals, candle, context) => {
             const adx = signals.find(s => s.name === 'ADX');
-            
+
             if (!adx || typeof adx.value !== 'number') {
               return { signal: 'neutral', confidence: 0.5, reasoning: 'ADX data unavailable' };
             }
@@ -1099,5 +1098,29 @@ export class StrategyRunner {
     } catch (error) {
       console.error('Failed to update market data from BinanceDataService:', error);
     }
+  }
+
+  updateIndicatorSignal(name: string, signal: any): void {
+    this.indicatorSignals.set(name, signal);
+    this.evaluateStrategy();
+  }
+
+  // Method to initialize required indicators
+  initializeIndicators(candles: CandleData[]): void {
+    if (candles.length < 50) return;
+
+    import('../utils/technicalIndicators').then(({ generateAllIndicators }) => {
+      const indicators = generateAllIndicators(candles);
+
+      // Set all calculated indicators
+      Object.entries(indicators).forEach(([name, indicator]) => {
+        this.updateIndicatorSignal(name, {
+          values: indicator.values,
+          signals: indicator.signals
+        });
+      });
+    }).catch(error => {
+      console.warn('Failed to initialize indicators:', error);
+    });
   }
 }

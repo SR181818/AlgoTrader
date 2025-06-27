@@ -164,28 +164,73 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
       setTotalPnL(usdtBalance - 10000);
     });
 
-    // Load manual trading orders from localStorage
+    // Load manual trading data from localStorage and ManualTradingService
     const loadManualOrders = () => {
       try {
+        // Load from localStorage (legacy format)
         const storedOrders = JSON.parse(localStorage.getItem('manualTradingOrders') || '[]');
-        const manualOrders = storedOrders.map((order: any) => ({
+        
+        // Load from ManualTradingService (new format)
+        const manualTrades = manualTradingService.getCurrentTrades();
+        
+        // Convert manual trades to order format
+        const manualOrders = manualTrades.map((trade: any) => ({
+          id: trade.id,
+          timestamp: trade.timestamp,
+          executedAmount: trade.quantity,
+          executedPrice: trade.fillPrice || trade.price,
+          status: trade.status,
+          fees: 0,
+          intent: {
+            symbol: trade.symbol,
+            side: trade.side,
+            amount: trade.quantity,
+            price: trade.price,
+            signal: {
+              type: trade.side === 'buy' ? 'LONG' : 'SHORT',
+              strength: 'STRONG',
+              confidence: 1,
+              price: trade.price,
+              timestamp: trade.timestamp,
+              reasoning: ['Manual trade'],
+              indicators: [],
+              metadata: { symbol: trade.symbol, timeframe: 'manual' }
+            }
+          }
+        }));
+        
+        // Merge legacy orders with new manual orders
+        const legacyOrders = storedOrders.map((order: any) => ({
           ...order,
           timestamp: order.timestamp,
           executedAmount: order.quantity,
           executedPrice: order.fillPrice || order.price,
           status: order.status,
+          fees: 0,
           intent: {
             symbol: order.symbol,
             side: order.side,
             amount: order.quantity,
-            price: order.price
+            price: order.price,
+            signal: {
+              type: order.side === 'buy' ? 'LONG' : 'SHORT',
+              strength: 'STRONG',
+              confidence: 1,
+              price: order.price,
+              timestamp: order.timestamp,
+              reasoning: ['Manual trade (legacy)'],
+              indicators: [],
+              metadata: { symbol: order.symbol, timeframe: 'manual' }
+            }
           }
         }));
         
+        const allManualOrders = [...manualOrders, ...legacyOrders];
+        
         setOrders(prev => {
-          // Merge manual orders with existing orders, avoiding duplicates
+          // Merge manual orders with existing strategy orders, avoiding duplicates
           const existingIds = new Set(prev.map(o => o.id));
-          const newManualOrders = manualOrders.filter((o: any) => !existingIds.has(o.id));
+          const newManualOrders = allManualOrders.filter((o: any) => !existingIds.has(o.id));
           return [...prev, ...newManualOrders].sort((a, b) => b.timestamp - a.timestamp);
         });
       } catch (error) {
@@ -405,7 +450,23 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     }
   };
 
-  const currentPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0) + manualTradingPnL;
+  // Calculate total PnL including positions and manual trading
+  const positionsPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
+  const currentPnL = positionsPnL + manualTradingPnL;
+  
+  // Update daily PnL to include manual trading changes
+  useEffect(() => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    // Calculate daily change in manual trading PnL
+    const manualTrades = manualTradingService.getCurrentTrades();
+    const todayManualPnL = manualTrades
+      .filter(trade => trade.timestamp >= startOfDay.getTime() && trade.status === 'filled')
+      .reduce((sum, trade) => sum + (trade.pnl || 0), 0);
+    
+    setDailyPnL(todayManualPnL + positionsPnL);
+  }, [manualTradingPnL, positionsPnL]);
 
   return (
     <div className="space-y-6">

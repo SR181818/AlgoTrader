@@ -112,7 +112,8 @@ class ManualTradingService {
       ...trade,
       id: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: Date.now(),
-      fillPrice: trade.type === 'market' ? trade.price : undefined
+      fillPrice: trade.type === 'market' ? trade.price : undefined,
+      status: trade.type === 'market' ? 'filled' : trade.status
     };
 
     const currentTrades = this.tradesSubject.value;
@@ -124,8 +125,41 @@ class ManualTradingService {
       this.updateBalance(newTrade);
     }
 
+    // Also save to legacy format for backward compatibility
+    this.saveLegacyFormat(newTrade);
     this.saveToStorage();
+    
+    // Trigger storage event for cross-component updates
+    window.dispatchEvent(new StorageEvent('storage', { 
+      key: 'manualTrades', 
+      newValue: JSON.stringify(updatedTrades) 
+    }));
+    
     return newTrade;
+  }
+
+  private saveLegacyFormat(trade: ManualTrade) {
+    try {
+      const legacyOrders = JSON.parse(localStorage.getItem('manualTradingOrders') || '[]');
+      const legacyOrder = {
+        id: trade.id,
+        symbol: trade.symbol,
+        side: trade.side,
+        type: trade.type,
+        quantity: trade.quantity,
+        price: trade.price,
+        fillPrice: trade.fillPrice,
+        status: trade.status,
+        timestamp: trade.timestamp,
+        pnl: trade.pnl,
+        currentPrice: trade.currentPrice
+      };
+      
+      legacyOrders.unshift(legacyOrder);
+      localStorage.setItem('manualTradingOrders', JSON.stringify(legacyOrders.slice(0, 100))); // Keep last 100
+    } catch (error) {
+      console.warn('Failed to save legacy format:', error);
+    }
   }
 
   private updateBalance(trade: ManualTrade) {

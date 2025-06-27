@@ -98,103 +98,70 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     }
   }, [config, selectedStrategy]);
 
-  // Initialize chart when results are available
+  // Create chart when container is ready
   useEffect(() => {
-    if (results && chartContainerRef.current) {
-      // Clear previous chart
-      chartContainerRef.current.innerHTML = '';
-
+    if (chartContainerRef.current && results) {
       try {
-        // Create chart
-        const chart: IChartApi = createChart(chartContainerRef.current, {
+        // Clear any existing chart
+        chartContainerRef.current.innerHTML = '';
+
+        const chart = createChart(chartContainerRef.current, {
           width: chartContainerRef.current.clientWidth,
           height: 400,
           layout: {
             background: { type: ColorType.Solid, color: '#1f2937' },
-            textColor: '#d1d5db',
+            textColor: '#ffffff',
           },
           grid: {
             vertLines: { color: '#374151' },
             horzLines: { color: '#374151' },
           },
-          rightPriceScale: {
-            borderColor: '#4b5563',
-          },
           timeScale: {
-            borderColor: '#4b5563',
+            timeVisible: true,
+            secondsVisible: false,
           },
         });
 
-        // Add equity curve series
-        const equitySeries = chart.addLineSeries({
-          color: '#60A5FA',
+        // Add equity line series
+        const equityLineSeries = chart.addLineSeries({
+          color: '#3b82f6',
           lineWidth: 2,
-          title: 'Equity',
+          title: 'Portfolio Equity',
         });
 
-        // Add drawdown series
-        const drawdownSeries = chart.addLineSeries({
-          color: '#EF4444',
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
-          title: 'Drawdown',
-          priceScaleId: 'drawdown',
-        });
+        // Prepare chart data
+        const chartData = results.equity
+          .filter(point => point.timestamp && point.value)
+          .map(point => ({
+            time: Math.floor(point.timestamp / 1000) as any, // Convert to seconds
+            value: point.value,
+          }))
+          .sort((a, b) => a.time - b.time);
 
-      // Configure drawdown scale
-      chart.priceScale('drawdown').applyOptions({
-        position: 'right',
-        scaleMargins: {
-          top: 0.8,
-          bottom: 0,
-        },
-      });
-
-      // Prepare data with unique timestamps
-      const equityData = results.equity.map((point, index) => ({
-        time: Math.floor(point.timestamp / 1000) + index, // Add index to ensure unique timestamps
-        value: point.value,
-      }));
-
-      // Calculate drawdown series
-      let peak = config.initialBalance || 10000;
-      const drawdownData = results.equity.map((point, index) => {
-        if (point.value > peak) peak = point.value;
-        const drawdownPercent = ((peak - point.value) / peak) * 100;
-        return {
-          time: Math.floor(point.timestamp / 1000) + index, // Add index to ensure unique timestamps
-          value: drawdownPercent,
-        };
-      });
-
-      // Set data
-      equitySeries.setData(equityData);
-      drawdownSeries.setData(drawdownData);
-
-      // Fit content
-      chart.timeScale().fitContent();
-
-      // Handle resize
-      const resizeObserver = new ResizeObserver(() => {
-        if (chartContainerRef.current) {
-          chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+        if (chartData.length > 0) {
+          equityLineSeries.setData(chartData);
+          chart.timeScale().fitContent();
         }
-      });
 
-      if (chartContainerRef.current) {
+        // Handle resize
+        const resizeObserver = new ResizeObserver(() => {
+          if (chartContainerRef.current) {
+            chart.resize(chartContainerRef.current.clientWidth, 400);
+          }
+        });
+
         resizeObserver.observe(chartContainerRef.current);
-      }
 
-      return () => {
+        return () => {
           resizeObserver.disconnect();
           chart.remove();
         };
       } catch (error) {
         console.error('Error creating chart:', error);
-        setError(`Failed to create chart: ${error instanceof Error ? error.message : String(error)}`);
+        setError('Failed to create equity curve chart: ' + (error as Error).message);
       }
     }
-  }, [results, config.initialBalance]);
+  }, [results]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -210,51 +177,62 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     }
   };
 
-  const generateSampleData = (): CandleData[] => {
-    // Generate sample OHLCV data for demonstration
-    const sampleData: CandleData[] = [];
-    let basePrice = 45000;
-    const startTime = config.startDate?.getTime() || Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const generateSampleData = () => {
+    const data: CandleData[] = [];
+    const startTime = config.startDate?.getTime() || (Date.now() - (1000 * 60 * 60 * 24 * 30)); // 30 days ago
+    const endTime = config.endDate?.getTime() || Date.now();
+    const timeframeMs = getTimeframeInMs(config.timeframe || '15m');
 
-    try {
-      for (let i = 0; i < (config.epochs || 100) * 10; i++) {
-        const timestamp = startTime + (i * 15 * 60 * 1000); // 15-minute intervals
-        const volatility = 0.002;
-        const priceChange = (Math.random() - 0.5) * volatility;
+    let currentPrice = 50000; // Starting BTC price
+    let currentTime = startTime;
 
-        const open = basePrice;
-        basePrice = basePrice * (1 + priceChange);
-        const close = basePrice;
-        const high = Math.max(open, close) * (1 + Math.random() * volatility * 0.5);
-        const low = Math.min(open, close) * (1 - Math.random() * volatility * 0.5);
-        const volume = 100 + Math.random() * 1000;
+    while (currentTime <= endTime) {
+      // More realistic price movement with volatility clustering
+      const hourOfDay = new Date(currentTime).getHours();
+      const volatilityMultiplier = hourOfDay >= 9 && hourOfDay <= 16 ? 1.5 : 1; // Higher volatility during trading hours
 
-        // Validate the candle data
-        if (isNaN(timestamp) || isNaN(open) || isNaN(high) || isNaN(low) || isNaN(close) || isNaN(volume)) {
-          console.warn(`Invalid candle data at index ${i}:`, { timestamp, open, high, low, close, volume });
-          continue;
-        }
+      const change = (Math.random() - 0.5) * currentPrice * 0.015 * volatilityMultiplier;
+      const open = currentPrice;
+      const close = Math.max(100, currentPrice + change); // Prevent negative prices
 
-        sampleData.push({
-          timestamp,
-          open,
-          high,
-          low,
-          close,
-          volume
-        });
-      }
+      // Create realistic OHLC
+      const direction = close > open ? 1 : -1;
+      const highExtra = Math.random() * currentPrice * 0.008 * Math.abs(direction);
+      const lowExtra = Math.random() * currentPrice * 0.008 * Math.abs(direction);
 
-      console.log('Sample data generated:', sampleData.length, 'candles');
-      setSampleDataGenerated(true);
-      setSampleData(sampleData);
-      setCsvData(''); // Clear CSV data when sample data is generated
+      const high = Math.max(open, close) + highExtra;
+      const low = Math.min(open, close) - lowExtra;
+      const volume = 50 + Math.random() * 200; // More realistic volume
 
-      return sampleData;
-    } catch (error) {
-      console.error('Error generating sample data:', error);
-      throw new Error(`Failed to generate sample data: ${error instanceof Error ? error.message : String(error)}`);
+      data.push({
+        timestamp: currentTime,
+        open,
+        high,
+        low,
+        close,
+        volume
+      });
+
+      currentPrice = close;
+      currentTime += timeframeMs;
     }
+
+    setSampleData(data);
+    setSampleDataGenerated(true);
+    console.log(`Generated ${data.length} sample candles from ${new Date(startTime)} to ${new Date(endTime)}`);
+  };
+
+  const getTimeframeInMs = (timeframe: string): number => {
+    const timeframeMap: { [key: string]: number } = {
+      '1m': 60 * 1000,
+      '5m': 5 * 60 * 1000,
+      '15m': 15 * 60 * 1000,
+      '30m': 30 * 60 * 1000,
+      '1h': 60 * 60 * 1000,
+      '4h': 4 * 60 * 60 * 1000,
+      '1d': 24 * 60 * 60 * 1000,
+    };
+    return timeframeMap[timeframe] || 15 * 60 * 1000;
   };
 
   const startBacktest = async () => {
@@ -370,6 +348,81 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       default:
         return StrategyRunner.createDefaultStrategy();
     }
+  };
+
+  const runBacktest = async () => {
+    if (!backtester) {
+      setError('Backtester not initialized');
+      return;
+    }
+
+    setIsRunning(true);
+    setIsPaused(false);
+    setResults(null);
+    setError(null);
+
+    try {
+      let dataToUse: CandleData[] = [];
+
+      if (csvData) {
+        // Use uploaded CSV data
+        dataToUse = parseCsvData(csvData);
+      } else if (sampleDataGenerated && sampleData.length > 0) {
+        // Use generated sample data
+        dataToUse = sampleData;
+      } else {
+        // Generate sample data if none exists
+        generateSampleData();
+        // Wait for sample data to be set
+        await new Promise(resolve => setTimeout(resolve, 100));
+        dataToUse = sampleData;
+      }
+
+      if (dataToUse.length === 0) {
+        throw new Error('No data available for backtesting');
+      }
+
+      console.log(`Loading ${dataToUse.length} candles for backtesting`);
+
+      // Load data into backtester
+      backtester.loadData(dataToUse);
+
+      // Initialize indicators for the strategy
+      const strategyRunner = (backtester as any).strategyRunner;
+      if (strategyRunner && strategyRunner.initializeIndicators) {
+        strategyRunner.initializeIndicators(dataToUse);
+      }
+
+      console.log('Starting backtest...');
+
+      // Run backtest
+      const results = await backtester.startBacktest();
+      setResults(results);
+
+      if (onResultsGenerated) {
+        onResultsGenerated(results);
+      }
+
+      console.log('Backtest completed successfully:', {
+        totalTrades: results.totalTrades,
+        totalReturn: results.totalReturn,
+        winRate: results.winRate
+      });
+    } catch (error: any) {
+      console.error('Backtest failed:', error);
+      setError(error.message || 'Backtest failed');
+    } finally {
+      setIsRunning(false);
+      setIsPaused(false);
+    }
+  };
+
+  // Dummy function to simulate CSV parsing
+  const parseCsvData = (csvData: string): CandleData[] => {
+    // Implement actual CSV parsing logic here
+    // This is a placeholder
+    console.log("Parsing CSV data (placeholder)");
+    return [];
   };
 
   return (
@@ -534,7 +587,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         <div className="flex items-center space-x-4">
           {!isRunning ? (
             <button
-              onClick={startBacktest}
+              onClick={runBacktest}
               disabled={!backtester || isLoading || (!csvData && !sampleDataGenerated)}
               className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-white transition-colors"
             >
