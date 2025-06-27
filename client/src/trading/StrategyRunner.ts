@@ -794,18 +794,36 @@ export class StrategyRunner {
             const ema20 = signals.find(s => s.name === 'EMA_20');
             const ema50 = signals.find(s => s.name === 'EMA_50');
             
-            if (!ema20 || !ema50 || typeof ema20.value !== 'number' || typeof ema50.value !== 'number') {
+            if (!ema20 || !ema50) {
               return { signal: 'neutral', confidence: 0, reasoning: 'EMA data unavailable' };
             }
 
-            if (ema20.value > ema50.value) {
-              const spread = (ema20.value - ema50.value) / ema50.value;
+            let ema20Value: number, ema50Value: number;
+            
+            if (typeof ema20.value === 'number') {
+              ema20Value = ema20.value;
+            } else if (Array.isArray(ema20.value) && ema20.value.length > 0) {
+              ema20Value = ema20.value[ema20.value.length - 1];
+            } else {
+              return { signal: 'neutral', confidence: 0, reasoning: 'EMA20 data invalid' };
+            }
+            
+            if (typeof ema50.value === 'number') {
+              ema50Value = ema50.value;
+            } else if (Array.isArray(ema50.value) && ema50.value.length > 0) {
+              ema50Value = ema50.value[ema50.value.length - 1];
+            } else {
+              return { signal: 'neutral', confidence: 0, reasoning: 'EMA50 data invalid' };
+            }
+
+            if (ema20Value > ema50Value) {
+              const spread = (ema20Value - ema50Value) / ema50Value;
               const confidence = Math.min(spread * 100, 0.9);
-              return { signal: 'buy', confidence, reasoning: `EMA20 (${ema20.value.toFixed(2)}) > EMA50 (${ema50.value.toFixed(2)}) - bullish trend` };
-            } else if (ema20.value < ema50.value) {
-              const spread = (ema50.value - ema20.value) / ema50.value;
+              return { signal: 'buy', confidence, reasoning: `EMA20 (${ema20Value.toFixed(2)}) > EMA50 (${ema50Value.toFixed(2)}) - bullish trend` };
+            } else if (ema20Value < ema50Value) {
+              const spread = (ema50Value - ema20Value) / ema50Value;
               const confidence = Math.min(spread * 100, 0.9);
-              return { signal: 'sell', confidence, reasoning: `EMA20 (${ema20.value.toFixed(2)}) < EMA50 (${ema50.value.toFixed(2)}) - bearish trend` };
+              return { signal: 'sell', confidence, reasoning: `EMA20 (${ema20Value.toFixed(2)}) < EMA50 (${ema50Value.toFixed(2)}) - bearish trend` };
             }
 
             return { signal: 'neutral', confidence: 0.3, reasoning: 'EMA lines too close' };

@@ -52,7 +52,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
   useEffect(() => {
     if (config.startDate && config.endDate && config.initialBalance) {
       const strategy = getStrategyByName(selectedStrategy);
-      
+
       const backtestConfig: BacktestConfig = {
         startDate: config.startDate,
         endDate: config.endDate,
@@ -103,7 +103,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     if (results && chartContainerRef.current) {
       // Clear previous chart
       chartContainerRef.current.innerHTML = '';
-      
+
       try {
         // Create chart
         const chart: IChartApi = createChart(chartContainerRef.current, {
@@ -124,14 +124,14 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             borderColor: '#4b5563',
           },
         });
-        
+
         // Add equity curve series
         const equitySeries = chart.addLineSeries({
           color: '#60A5FA',
           lineWidth: 2,
           title: 'Equity',
         });
-        
+
         // Add drawdown series
         const drawdownSeries = chart.addLineSeries({
           color: '#EF4444',
@@ -140,7 +140,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
           title: 'Drawdown',
           priceScaleId: 'drawdown',
         });
-      
+
       // Configure drawdown scale
       chart.priceScale('drawdown').applyOptions({
         position: 'right',
@@ -149,13 +149,13 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
           bottom: 0,
         },
       });
-      
+
       // Prepare data with unique timestamps
       const equityData = results.equity.map((point, index) => ({
         time: Math.floor(point.timestamp / 1000) + index, // Add index to ensure unique timestamps
         value: point.value,
       }));
-      
+
       // Calculate drawdown series
       let peak = config.initialBalance || 10000;
       const drawdownData = results.equity.map((point, index) => {
@@ -166,25 +166,25 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
           value: drawdownPercent,
         };
       });
-      
+
       // Set data
       equitySeries.setData(equityData);
       drawdownSeries.setData(drawdownData);
-      
+
       // Fit content
       chart.timeScale().fitContent();
-      
+
       // Handle resize
       const resizeObserver = new ResizeObserver(() => {
         if (chartContainerRef.current) {
           chart.applyOptions({ width: chartContainerRef.current.clientWidth });
         }
       });
-      
+
       if (chartContainerRef.current) {
         resizeObserver.observe(chartContainerRef.current);
       }
-      
+
       return () => {
           resizeObserver.disconnect();
           chart.remove();
@@ -215,13 +215,13 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     const sampleData: CandleData[] = [];
     let basePrice = 45000;
     const startTime = config.startDate?.getTime() || Date.now() - 30 * 24 * 60 * 60 * 1000;
-    
+
     try {
       for (let i = 0; i < (config.epochs || 100) * 10; i++) {
         const timestamp = startTime + (i * 15 * 60 * 1000); // 15-minute intervals
         const volatility = 0.002;
         const priceChange = (Math.random() - 0.5) * volatility;
-        
+
         const open = basePrice;
         basePrice = basePrice * (1 + priceChange);
         const close = basePrice;
@@ -249,7 +249,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       setSampleDataGenerated(true);
       setSampleData(sampleData);
       setCsvData(''); // Clear CSV data when sample data is generated
-      
+
       return sampleData;
     } catch (error) {
       console.error('Error generating sample data:', error);
@@ -268,7 +268,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       setIsRunning(true);
       setResults(null);
       setError(null);
-      
+
       // Load data into backtester
       if (csvData) {
         backtester.loadData(csvData);
@@ -279,12 +279,12 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
         const data = generateSampleData();
         backtester.loadData(data);
       }
-      
+
       // Run backtest
       const result = await backtester.startBacktest();
-      
+
       setResults(result);
-      
+
       if (onResultsGenerated) {
         onResultsGenerated(result);
       }
@@ -377,7 +377,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       {/* Configuration Panel */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
         <h2 className="text-xl font-bold text-white mb-4">Backtest Configuration</h2>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className="block text-sm text-gray-300 mb-1">Symbol</label>
@@ -563,7 +563,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
             <span className="text-yellow-400 text-sm">Please upload CSV data or generate sample data first</span>
           )}
         </div>
-        
+
         {error && (
           <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400">
             <AlertTriangle size={16} className="inline-block mr-2" />
@@ -581,7 +581,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
               {progress.processedCandles} / {progress.totalCandles} candles
             </div>
           </div>
-          
+
           <div className="mb-4">
             <div className="flex justify-between text-sm text-gray-400 mb-1">
               <span>Progress</span>
@@ -627,207 +627,220 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       {/* Results Display */}
       {results && (
         <div className="space-y-6">
-          {/* Summary Metrics */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Backtest Results</h3>
-              <button
-                onClick={downloadResults}
-                className="flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
-              >
-                <Download size={16} className="mr-2" />
-                Download CSV
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-gray-400 text-sm">Total Return</div>
-                    <div className={`text-2xl font-bold ${results.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {formatCurrency(results.totalReturn)}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {formatPercent(results.totalReturnPercent)}
-                    </div>
-                  </div>
-                  {results.totalReturn >= 0 ? 
-                    <TrendingUp className="text-green-400" size={24} /> :
-                    <TrendingDown className="text-red-400" size={24} />
-                  }
+          {/* Summary Stats Row */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-sm text-gray-600">Total Return</div>
+                <div className={`text-2xl font-bold ${results.totalReturnPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {results.totalReturnPercent.toFixed(2)}%
                 </div>
-              </div>
-
-              <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-gray-400 text-sm">Sharpe Ratio</div>
-                    <div className="text-2xl font-bold text-white">
-                      {results.sharpeRatio.toFixed(2)}
-                    </div>
-                  </div>
-                  <BarChart3 className="text-blue-400" size={24} />
+                <div className="text-xs text-gray-500">
+                  ${results.totalReturn.toFixed(2)}
                 </div>
-              </div>
+              </CardContent>
+            </Card>
 
-              <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-gray-400 text-sm">Max Drawdown</div>
-                    <div className="text-2xl font-bold text-red-400">
-                      -{results.maxDrawdownPercent.toFixed(2)}%
-                    </div>
-                  </div>
-                  <AlertTriangle className="text-red-400" size={24} />
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-sm text-gray-600">Win Rate</div>
+                <div className="text-2xl font-bold text-blue-600">
+                  {results.winRate.toFixed(1)}%
                 </div>
-              </div>
-
-              <div className="bg-gray-700/50 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="text-gray-400 text-sm">Win Rate</div>
-                    <div className="text-2xl font-bold text-white">
-                      {results.winRate.toFixed(1)}%
-                    </div>
-                  </div>
-                  <Target className="text-green-400" size={24} />
+                <div className="text-xs text-gray-500">
+                  {results.winningTrades}/{results.totalTrades} trades
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
-            {/* Equity Curve Chart */}
-            <div className="h-96" ref={chartContainerRef}></div>
-
-            {/* Detailed Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <h4 className="text-white font-medium mb-3">Trade Statistics</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Total Trades:</span>
-                    <span className="text-white">{results.totalTrades}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Winning Trades:</span>
-                    <span className="text-green-400">{results.winningTrades}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Losing Trades:</span>
-                    <span className="text-red-400">{results.losingTrades}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Profit Factor:</span>
-                    <span className="text-white">{results.profitFactor.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Average Win:</span>
-                    <span className="text-green-400">{formatCurrency(results.averageWin)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Average Loss:</span>
-                    <span className="text-red-400">{formatCurrency(-results.averageLoss)}</span>
-                  </div>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-sm text-gray-600">Max Drawdown</div>
+                <div className="text-2xl font-bold text-red-600">
+                  {results.maxDrawdownPercent.toFixed(2)}%
                 </div>
-              </div>
-
-              <div>
-                <h4 className="text-white font-medium mb-3">Risk Metrics</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Calmar Ratio:</span>
-                    <span className="text-white">{results.calmarRatio.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Sortino Ratio:</span>
-                    <span className="text-white">{results.sortinoRatio.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Largest Win:</span>
-                    <span className="text-green-400">{formatCurrency(results.largestWin)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Largest Loss:</span>
-                    <span className="text-red-400">{formatCurrency(results.largestLoss)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Consecutive Wins:</span>
-                    <span className="text-white">{results.consecutiveWins}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Consecutive Losses:</span>
-                    <span className="text-white">{results.consecutiveLosses}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Time in Market:</span>
-                    <span className="text-white">{results.timeInMarket.toFixed(1)}%</span>
-                  </div>
+                <div className="text-xs text-gray-500">
+                  Peak to trough
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-sm text-gray-600">Sharpe Ratio</div>
+                <div className="text-2xl font-bold text-purple-600">
+                  {results.sharpeRatio.toFixed(2)}
+                </div>
+                <div className="text-xs text-gray-500">
+                  Risk-adjusted return
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Equity Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Equity Curve</CardTitle>
+              <CardDescription>
+                Portfolio value over time with {results.trades.length} trades executed
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div ref={chartContainerRef} className="w-full h-96" />
+            </CardContent>
+          </Card>
+
+          {/* Detailed Performance Metrics */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Trade Statistics</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between">
+                  <span>Total Trades</span>
+                  <span className="font-semibold">{results.totalTrades}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Winning Trades</span>
+                  <span className="text-green-600">{results.winningTrades}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Losing Trades</span>
+                  <span className="text-red-600">{results.losingTrades}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Average Win</span>
+                  <span className="text-green-600">${results.averageWin.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Average Loss</span>
+                  <span className="text-red-600">-${results.averageLoss.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Largest Win</span>
+                  <span className="text-green-600">${results.largestWin.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Largest Loss</span>
+                  <span className="text-red-600">-${Math.abs(results.largestLoss).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Profit Factor</span>
+                  <span className="font-semibold">{results.profitFactor.toFixed(2)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Risk Metrics</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between">
+                  <span>Sharpe Ratio</span>
+                  <span className="font-semibold">{results.sharpeRatio.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Sortino Ratio</span>
+                  <span className="font-semibold">{results.sortinoRatio.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Calmar Ratio</span>
+                  <span className="font-semibold">{results.calmarRatio.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Max Drawdown</span>
+                  <span className="text-red-600">{results.maxDrawdownPercent.toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Time in Market</span>
+                  <span>{results.timeInMarket.toFixed(1)}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Consecutive Wins</span>
+                  <span className="text-green-600">{results.consecutiveWins}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Consecutive Losses</span>
+                  <span className="text-red-600">{results.consecutiveLosses}</span>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Recent Trades */}
-          <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-            <div className="p-4 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-white">Recent Trades</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-700">
-                    <th className="text-left p-4 text-gray-400 font-medium">Symbol</th>
-                    <th className="text-left p-4 text-gray-400 font-medium">Side</th>
-                    <th className="text-right p-4 text-gray-400 font-medium">Entry</th>
-                    <th className="text-right p-4 text-gray-400 font-medium">Exit</th>
-                    <th className="text-right p-4 text-gray-400 font-medium">P&L</th>
-                    <th className="text-right p-4 text-gray-400 font-medium">Duration</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.trades.slice(-10).reverse().map((trade) => (
-                    <tr key={trade.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                      <td className="p-4">
-                        <div className="text-white font-medium">{trade.symbol}</div>
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          trade.side === 'buy' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
-                        }`}>
-                          {trade.side.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="text-white font-mono">{formatCurrency(trade.entryPrice)}</div>
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="text-white font-mono">
-                          {trade.exitPrice ? formatCurrency(trade.exitPrice) : '-'}
-                        </div>
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className={`font-mono ${(trade.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {trade.pnl ? formatCurrency(trade.pnl) : '-'}
-                        </div>
-                        {trade.pnlPercent && (
-                          <div className="text-xs text-gray-400">
-                            {formatPercent(trade.pnlPercent)}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-4 text-right">
-                        <div className="text-gray-400 text-sm">
-                          {trade.duration ? `${Math.round(trade.duration / (1000 * 60))}m` : '-'}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {results.trades.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Trades</CardTitle>
+                <CardDescription>Last 10 trades executed</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-2">Symbol</th>
+                        <th className="text-left p-2">Side</th>
+                        <th className="text-left p-2">Entry</th>
+                        <th className="text-left p-2">Exit</th>
+                        <th className="text-left p-2">P&L</th>
+                        <th className="text-left p-2">%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.trades.slice(-10).reverse().map((trade, index) => (
+                        <tr key={trade.id} className="border-b">
+                          <td className="p-2">{trade.symbol}</td>
+                          <td className="p-2">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              trade.side === 'buy' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {trade.side.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="p-2">${trade.entryPrice.toFixed(2)}</td>
+                          <td className="p-2">${trade.exitPrice?.toFixed(2) || '-'}</td>
+                          <td className={`p-2 ${(trade.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+${(trade.pnl || 0).toFixed(2)}
+                          </td>
+                          <td className={`p-2 ${(trade.pnlPercent || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {(trade.pnlPercent || 0).toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+// Dummy Card and CardContent components (replace with your actual components if available)
+function Card({ children }: { children: React.ReactNode }) {
+  return <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full">{children}</div>;
+}
+
+function CardHeader({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col space-y-1.5 p-6">{children}</div>;
+}
+
+function CardTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="text-2xl font-semibold leading-none tracking-tight">{children}</h3>;
+}
+
+function CardDescription({ children }: { children: React.ReactNode }) {
+  return <p className="text-sm text-muted-foreground">{children}</p>;
+}
+
+
+function CardContent({ children }: { children: React.ReactNode }) {
+  return <div className="p-6 pt-0">{children}</div>;
 }

@@ -277,6 +277,9 @@ export class Backtester {
     // Update strategy with new candle
     this.strategyRunner.updateCandle(candle);
 
+    // Generate technical indicators and update strategy
+    this.updateIndicators();
+
     // Update current equity
     const currentEquity = this.calculateCurrentEquity(candle.close);
     // Use candle timestamp + interval to ensure strictly increasing timestamps
@@ -287,6 +290,58 @@ export class Backtester {
 
     // Update risk manager
     this.riskManager.updateAccountBalance(currentEquity);
+  }
+
+  /**
+   * Update technical indicators for strategy
+   */
+  private updateIndicators(): void {
+    if (this.candles.length < 50) return; // Need enough data for indicators
+    
+    // Get recent candles for indicator calculation
+    const recentCandles = this.candles.slice(Math.max(0, this.currentIndex - 200), this.currentIndex + 1);
+    
+    // Import and use technical indicators
+    import('../utils/technicalIndicators').then(({ generateAllIndicators }) => {
+      const indicators = generateAllIndicators(recentCandles);
+      
+      // Update strategy runner with indicator signals
+      Object.entries(indicators).forEach(([name, indicator]) => {
+        if (indicator.values.length > 0) {
+          const latestValue = Array.isArray(indicator.values) 
+            ? indicator.values[indicator.values.length - 1]
+            : indicator.values;
+          
+          this.strategyRunner.updateIndicatorSignal(name, {
+            values: latestValue,
+            signals: this.generateSignalFromIndicator(name, latestValue)
+          });
+        }
+      });
+    }).catch(error => {
+      console.warn('Failed to update indicators:', error);
+    });
+  }
+
+  /**
+   * Generate trading signal from indicator value
+   */
+  private generateSignalFromIndicator(name: string, value: any): ('buy' | 'sell' | 'neutral')[] {
+    switch (name) {
+      case 'RSI':
+        if (typeof value === 'number') {
+          if (value < 30) return ['buy'];
+          if (value > 70) return ['sell'];
+        }
+        break;
+      case 'MACD':
+        if (typeof value === 'object' && value.histogram !== undefined) {
+          if (value.histogram > 0) return ['buy'];
+          if (value.histogram < 0) return ['sell'];
+        }
+        break;
+    }
+    return ['neutral'];
   }
 
   /**
