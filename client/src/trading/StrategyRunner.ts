@@ -194,4 +194,45 @@ export class StrategyRunner {
   }
 }
 
+// Static factory methods for creating strategy configurations
+  static createDefaultStrategy(): StrategyConfig {
+    return {
+      name: 'Multi-Indicator Confluence Strategy',
+      version: '1.0.0',
+      parameters: {
+        rsi_period: 14,
+        rsi_oversold: 30,
+        rsi_overbought: 70,
+        macd_fast: 12,
+        macd_slow: 26,
+        macd_signal: 9,
+        ema_short: 12,
+        ema_long: 26,
+        adx_period: 14,
+        adx_threshold: 25,
+        signal_threshold: 0.6,
+        confluence_required: 2
+      }
+    };
+  }
+
+  static createTrendFollowingStrategy(): StrategyConfig {
+    return {
+      name: 'Trend Following Strategy',
+      version: '1.0.0',
+      parameters: {
+        ema_fast: 9,
+        ema_slow: 21,
+        rsi_period: 14,
+        rsi_neutral_high: 60,
+        rsi_neutral_low: 40,
+        adx_period: 14,
+        adx_trend_threshold: 30,
+        signal_threshold: 0.7,
+        trend_confirmation: true
+      }
+    };
+  }
+}
+
 export default StrategyRunner;
