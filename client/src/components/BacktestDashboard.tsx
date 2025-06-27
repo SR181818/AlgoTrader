@@ -76,10 +76,8 @@ export function BacktestDashboard({
         strategy: strategy,
         riskConfig: {
           maxRiskPerTrade: 0.02,
-          maxDailyDrawdown: 0.05,
-          maxOpenPositions: 5,
-          maxCorrelatedPositions: 2,
-          minRiskRewardRatio: 2,
+          maxDrawdown: 0.05,
+          maxPositions: 5,
           maxLeverage: 3,
           emergencyStopLoss: 0.1,
           cooldownPeriod: 60,
@@ -93,6 +91,10 @@ export function BacktestDashboard({
           maxOrderSize: 1000,
           enableStopLoss: true,
           enableTakeProfit: true,
+          enablePartialFills: true,
+          orderTimeout: 30000,
+          retryAttempts: 3,
+          retryDelay: 1000,
         },
         replaySpeed: config.replaySpeed || 100,
         commission: config.commission || 0.001,
@@ -107,6 +109,16 @@ export function BacktestDashboard({
 
       // Subscribe to progress updates
       newBacktester.getProgressUpdates().subscribe(setProgress);
+
+      // Automatically run backtest when strategy or config changes
+      const autoRunBacktest = async () => {
+        if (!isRunning) {
+          await new Promise(resolve => setTimeout(resolve, 500)); // Small delay to ensure setup
+          runBacktest();
+        }
+      };
+      
+      autoRunBacktest();
 
       return () => {
         newBacktester.dispose();
@@ -144,7 +156,7 @@ export function BacktestDashboard({
     }
   };
 
-  const generateSampleData = () => {
+  const generateSampleData = (): CandleData[] => {
     const data: CandleData[] = [];
     const startTime =
       config.startDate?.getTime() || Date.now() - 1000 * 60 * 60 * 24 * 30; // 30 days ago
@@ -193,6 +205,7 @@ export function BacktestDashboard({
     console.log(
       `Generated ${data.length} sample candles from ${new Date(startTime)} to ${new Date(endTime)}`,
     );
+    return data;
   };
 
   const getTimeframeInMs = (timeframe: string): number => {
@@ -349,10 +362,7 @@ export function BacktestDashboard({
         dataToUse = sampleData;
       } else {
         // Generate sample data if none exists
-        generateSampleData();
-        // Wait for sample data to be set
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        dataToUse = sampleData;
+        dataToUse = generateSampleData();
       }
 
       if (dataToUse.length === 0) {
@@ -590,8 +600,7 @@ export function BacktestDashboard({
             <button
               onClick={() => {
                 try {
-                  const data = generateSampleData();
-                  setSampleData(data);
+                  generateSampleData();
                 } catch (error) {
                   setError(
                     `Failed to generate sample data: ${error instanceof Error ? error.message : String(error)}`,
@@ -614,44 +623,23 @@ export function BacktestDashboard({
           </div>
         </div>
 
-        {/* Control Buttons */}
+        {/* Status Display */}
         <div className="flex items-center space-x-4">
-          {!isRunning ? (
-            <button
-              onClick={runBacktest}
-              disabled={
-                !backtester || isLoading || (!csvData && !sampleDataGenerated)
-              }
-              className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-white transition-colors"
-            >
-              <Play size={16} className="mr-2" />
-              {isLoading ? "Loading..." : "Start Backtest"}
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={pauseBacktest}
-                className="flex items-center px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white transition-colors"
-              >
-                {isPaused ? (
-                  <Play size={16} className="mr-2" />
-                ) : (
-                  <Pause size={16} className="mr-2" />
-                )}
-                {isPaused ? "Resume" : "Pause"}
-              </button>
-              <button
-                onClick={stopBacktest}
-                className="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition-colors"
-              >
-                <Square size={16} className="mr-2" />
-                Stop
-              </button>
-            </>
+          {isRunning && (
+            <div className="flex items-center text-blue-400">
+              <Activity size={16} className="mr-2 animate-pulse" />
+              <span>Running backtest automatically...</span>
+            </div>
           )}
-          {!csvData && !sampleDataGenerated && (
+          {results && !isRunning && (
+            <div className="flex items-center text-green-400">
+              <CheckCircle size={16} className="mr-2" />
+              <span>Backtest completed</span>
+            </div>
+          )}
+          {!csvData && !sampleDataGenerated && !isRunning && (
             <span className="text-yellow-400 text-sm">
-              Please upload CSV data or generate sample data first
+              Generating sample data and running backtest...
             </span>
           )}
         </div>
