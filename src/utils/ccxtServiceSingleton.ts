@@ -1,6 +1,6 @@
-import CCXTDataService from '../utils/ccxtDataService';
+import BinanceDataService from '../utils/ccxtDataService';
 
 // Singleton instance for live price fetching
-const ccxtService = new CCXTDataService();
+const binanceService = new BinanceDataService();
 
-export default ccxtService;
+export default binanceService;

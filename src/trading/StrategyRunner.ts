@@ -2,6 +2,7 @@ import { Observable, Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { map, filter, distinctUntilChanged, debounceTime, tap } from 'rxjs/operators';
 import { CandleData } from '../types/trading';
 import { TALibIndicatorResult } from '../utils/talib-indicators';
+import BinanceDataService from '../utils/ccxtDataService';
 
 export type SignalType = 'LONG' | 'SHORT' | 'HOLD';
 export type SignalStrength = 'WEAK' | 'MODERATE' | 'STRONG';
@@ -119,7 +120,11 @@ export class StrategyRunner {
   private signalHistory: StrategySignal[] = [];
   private maxSignalHistory = 100;
 
-  constructor(strategy?: StrategyConfig) {
+  private dataService: BinanceDataService;
+
+  constructor(strategy?: StrategyConfig, apiKey?: string, apiSecret?: string) {
+    this.dataService = new BinanceDataService(apiKey, apiSecret);
+
     this.context = {
       symbol: '',
       timeframe: '',
@@ -1050,5 +1055,31 @@ export class StrategyRunner {
     this.strategySignals.complete();
     this.indicatorSignals.forEach(subject => subject.complete());
     this.indicatorSignals.clear();
+  }
+
+  /**
+   * Update candle from BinanceDataService
+   */
+  async updateCandleFromService(symbol: string, timeframe: string): Promise<void> {
+    try {
+      const candles = await this.dataService.fetchOHLCV(symbol, timeframe, 1);
+      if (candles.length > 0) {
+        this.updateCandle(candles[0]);
+      }
+    } catch (error) {
+      console.error('Failed to update candle from BinanceDataService:', error);
+    }
+  }
+
+  /**
+   * Update market data from BinanceDataService
+   */
+  async updateMarketData(symbol: string): Promise<void> {
+    try {
+      const marketData = await this.dataService.fetchTicker(symbol);
+      console.log('Market data:', marketData);
+    } catch (error) {
+      console.error('Failed to update market data from BinanceDataService:', error);
+    }
   }
 }

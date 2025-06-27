@@ -1,316 +1,112 @@
-import ccxt from 'ccxt';
+import axios from 'axios';
+import crypto from 'crypto';
 import { CandleData, MarketData, TradingPair } from '../types/trading';
 import Logger from './logger';
 
-class CCXTDataService {
-  private exchanges: Map<string, ccxt.Exchange> = new Map();
+const BINANCE_API_BASE = 'https://api.binance.com';
+
+class BinanceDataService {
   private subscribers: Map<string, Set<(data: any) => void>> = new Map();
-  private marketData: Map<string, MarketData> = new Map();
-  private candleData: Map<string, Map<string, CandleData[]>> = new Map(); // symbol -> timeframe -> candles
   private updateIntervals: Map<string, NodeJS.Timeout> = new Map();
-  private isInitialized = false;
-  private isRealMode = false;
+  private isInitialized = true;
+  private apiKey?: string;
+  private apiSecret?: string;
 
-  constructor() {
-    this.initializeExchanges();
-  }
-
-  private async initializeExchanges() {
-    try {
-      // Check if CCXT constructors are available in browser environment
-      if (typeof ccxt.binance !== 'function' || typeof ccxt.oanda !== 'function') {
-        Logger.info('CCXT not available in browser environment, switching to demo mode');
-        this.initializeDemoMode();
-        return;
-      }
-
-      // Initialize Binance for crypto
-      const binance = new ccxt.binance({
-        apiKey: '', // Add your API keys if needed for higher rate limits
-        secret: '',
-        sandbox: false,
-        enableRateLimit: true,
-      });
-
-      // Initialize OANDA for forex and commodities
-      const oanda = new ccxt.oanda({
-        apiKey: '', // Add your OANDA API key
-        secret: '',
-        sandbox: true, // Set to false for live trading
-        enableRateLimit: true,
-      });
-
-      this.exchanges.set('binance', binance);
-      this.exchanges.set('oanda', oanda);
-
-      // Load markets
-      await Promise.all([
-        binance.loadMarkets(),
-        oanda.loadMarkets()
-      ]);
-
-      this.isInitialized = true;
-      this.isRealMode = true;
-      Logger.info('CCXT exchanges initialized successfully');
-    } catch (error) {
-      Logger.error('Failed to initialize CCXT exchanges:', error);
-      // Fallback to demo mode if CCXT fails
-      this.initializeDemoMode();
-    }
-  }
-
-  private initializeDemoMode() {
-    Logger.info('Running in demo mode with simulated data');
-    this.isInitialized = true;
-    this.isRealMode = false;
-    // Initialize with demo data similar to the previous implementation
-    this.initializeSimulatedData();
-  }
-
-  private initializeSimulatedData() {
-    // Fallback simulation data (same as before)
-    const basePrices: Record<string, number> = {
-      'BTC/USDT': 45000 + Math.random() * 20000,
-      'ETH/USDT': 2500 + Math.random() * 1500,
-      'ADA/USDT': 0.3 + Math.random() * 0.7,
-      'SOL/USDT': 80 + Math.random() * 120,
-      'DOT/USDT': 5 + Math.random() * 15,
-      'EUR/USD': 1.0500 + Math.random() * 0.1500,
-      'GBP/USD': 1.2000 + Math.random() * 0.3000,
-      'USD/JPY': 140.00 + Math.random() * 15.00,
-      'USD/CHF': 0.9000 + Math.random() * 0.2000,
-      'AUD/USD': 0.6500 + Math.random() * 0.1500,
-      'USD/CAD': 1.3500 + Math.random() * 0.2000,
-      'NZD/USD': 0.6000 + Math.random() * 0.1500,
-      'EUR/GBP': 0.8500 + Math.random() * 0.1000,
-      'EUR/JPY': 150.00 + Math.random() * 15.00,
-      'GBP/JPY': 180.00 + Math.random() * 15.00,
-      'XAU/USD': 1900.00 + Math.random() * 400.00,
-      'XAG/USD': 22.00 + Math.random() * 8.00,
-      'WTI/USD': 70.00 + Math.random() * 30.00
-    };
-
-    Object.entries(basePrices).forEach(([symbol, basePrice]) => {
-      const change24h = (Math.random() - 0.5) * 10;
-      const volume = this.getVolumeForSymbol(symbol);
-      
-      this.marketData.set(symbol, {
-        symbol,
-        price: basePrice,
-        change24h,
-        volume,
-        high24h: basePrice * (1 + Math.random() * 0.05),
-        low24h: basePrice * (1 - Math.random() * 0.05),
-        lastUpdate: Date.now(),
-        bid: basePrice * 0.9999,
-        ask: basePrice * 1.0001,
-        spread: basePrice * 0.0002
-      });
-
-      // Initialize candle data for different timeframes
-      if (!this.candleData.has(symbol)) {
-        this.candleData.set(symbol, new Map());
-      }
-      
-      const symbolCandles = this.candleData.get(symbol)!;
-      ['1m', '5m', '15m', '30m', '1h', '4h', '1d'].forEach(timeframe => {
-        symbolCandles.set(timeframe, this.generateInitialCandles(symbol, basePrice, timeframe));
-      });
-    });
-  }
-
-  private getVolumeForSymbol(symbol: string): number {
-    if (symbol.includes('BTC')) return 1000 + Math.random() * 5000;
-    if (symbol.includes('ETH')) return 5000 + Math.random() * 15000;
-    if (symbol.includes('USD')) return 100000 + Math.random() * 500000;
-    return 10000 + Math.random() * 50000;
-  }
-
-  private generateInitialCandles(symbol: string, basePrice: number, timeframe: string): CandleData[] {
-    const candles: CandleData[] = [];
-    const now = Date.now();
-    const timeframeMinutes = this.getTimeframeMinutes(timeframe);
-    let currentPrice = basePrice;
-
-    for (let i = 199; i >= 0; i--) {
-      const timestamp = now - (i * timeframeMinutes * 60 * 1000);
-      const volatility = this.getVolatilityForSymbol(symbol);
-      const priceChange = (Math.random() - 0.5) * volatility;
-      
-      const open = currentPrice;
-      currentPrice = currentPrice * (1 + priceChange);
-      const close = currentPrice;
-      const high = Math.max(open, close) * (1 + Math.random() * volatility * 0.5);
-      const low = Math.min(open, close) * (1 - Math.random() * volatility * 0.5);
-      const volume = this.getVolumeForSymbol(symbol) * (0.5 + Math.random());
-
-      candles.push({
-        timestamp,
-        open,
-        high,
-        low,
-        close,
-        volume
-      });
-    }
-
-    return candles;
-  }
-
-  private getTimeframeMinutes(timeframe: string): number {
-    const timeframeMap: Record<string, number> = {
-      '1m': 1,
-      '5m': 5,
-      '15m': 15,
-      '30m': 30,
-      '1h': 60,
-      '4h': 240,
-      '1d': 1440
-    };
-    return timeframeMap[timeframe] || 15;
-  }
-
-  private getVolatilityForSymbol(symbol: string): number {
-    if (symbol.includes('BTC') || symbol.includes('ETH')) return 0.003;
-    if (symbol.includes('TRY') || symbol.includes('ZAR')) return 0.002;
-    if (symbol.includes('XAU') || symbol.includes('XAG')) return 0.0015;
-    return 0.001;
+  constructor(apiKey?: string, apiSecret?: string) {
+    this.apiKey = apiKey;
+    this.apiSecret = apiSecret;
   }
 
   async fetchOHLCV(symbol: string, timeframe: string, limit: number = 200): Promise<CandleData[]> {
-    if (!this.isInitialized) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // If not in real mode, return simulated data directly
-    if (!this.isRealMode) {
-      return this.getSimulatedCandles(symbol, timeframe);
-    }
-
+    // Binance uses KLINE endpoints
+    const interval = this.mapTimeframe(timeframe);
+    const url = `${BINANCE_API_BASE}/api/v3/klines?symbol=${this.toBinanceSymbol(symbol)}&interval=${interval}&limit=${limit}`;
     try {
-      const pair = this.findTradingPair(symbol);
-      if (!pair) {
-        throw new Error(`Trading pair not found: ${symbol}`);
-      }
-
-      const exchange = this.exchanges.get(pair.exchange);
-      if (!exchange) {
-        throw new Error(`Exchange not found: ${pair.exchange}`);
-      }
-
-      const ohlcv = await exchange.fetchOHLCV(pair.ccxtSymbol, timeframe, undefined, limit);
-      
-      return ohlcv.map((candle: [number, number, number, number, number, number]) => {
-        const [timestamp, open, high, low, close, volume] = candle;
-        return {
-          timestamp,
-          open,
-          high,
-          low,
-          close,
-          volume
-        };
-      });
+      const res = await axios.get(url);
+      return res.data.map((candle: any[]) => ({
+        timestamp: candle[0],
+        open: parseFloat(candle[1]),
+        high: parseFloat(candle[2]),
+        low: parseFloat(candle[3]),
+        close: parseFloat(candle[4]),
+        volume: parseFloat(candle[5])
+      }));
     } catch (error) {
-      Logger.error(`Failed to fetch OHLCV for ${symbol}:`, error);
-      // Return simulated data as fallback
-      return this.getSimulatedCandles(symbol, timeframe);
+      Logger.error('Failed to fetch OHLCV from Binance:', error);
+      return [];
     }
   }
 
   async fetchTicker(symbol: string): Promise<MarketData> {
-    if (!this.isInitialized) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
-    // If not in real mode, return simulated data directly
-    if (!this.isRealMode) {
-      return this.getSimulatedMarketData(symbol);
-    }
-
+    const url = `${BINANCE_API_BASE}/api/v3/ticker/24hr?symbol=${this.toBinanceSymbol(symbol)}`;
     try {
-      const pair = this.findTradingPair(symbol);
-      if (!pair) {
-        throw new Error(`Trading pair not found: ${symbol}`);
-      }
-
-      const exchange = this.exchanges.get(pair.exchange);
-      if (!exchange) {
-        throw new Error(`Exchange not found: ${pair.exchange}`);
-      }
-
-      const ticker = await exchange.fetchTicker(pair.ccxtSymbol);
-      
+      const res = await axios.get(url);
+      const t = res.data;
       return {
         symbol,
-        price: ticker.last || 0,
-        change24h: ticker.percentage || 0,
-        volume: ticker.baseVolume || 0,
-        high24h: ticker.high || 0,
-        low24h: ticker.low || 0,
+        price: parseFloat(t.lastPrice),
+        change24h: parseFloat(t.priceChangePercent),
+        volume: parseFloat(t.volume),
+        high24h: parseFloat(t.highPrice),
+        low24h: parseFloat(t.lowPrice),
         lastUpdate: Date.now(),
-        bid: ticker.bid,
-        ask: ticker.ask,
-        spread: ticker.ask && ticker.bid ? ticker.ask - ticker.bid : undefined
+        bid: parseFloat(t.bidPrice),
+        ask: parseFloat(t.askPrice),
+        spread: parseFloat(t.askPrice) - parseFloat(t.bidPrice)
       };
     } catch (error) {
-      Logger.error(`Failed to fetch ticker for ${symbol}:`, error);
-      // Return simulated data as fallback
-      return this.getSimulatedMarketData(symbol);
+      Logger.error('Failed to fetch ticker from Binance:', error);
+      return {
+        symbol,
+        price: 0,
+        change24h: 0,
+        volume: 0,
+        high24h: 0,
+        low24h: 0,
+        lastUpdate: Date.now()
+      };
     }
   }
 
-  private findTradingPair(symbol: string): TradingPair | undefined {
-    // This would be imported from tradingPairs.ts
-    // For now, return a basic mapping
-    const pairs: Record<string, TradingPair> = {
-      'BTC/USDT': {
-        symbol: 'BTC/USDT',
-        name: 'Bitcoin / Tether',
-        category: 'crypto',
-        baseAsset: 'BTC',
-        quoteAsset: 'USDT',
-        minPrice: 0.01,
-        maxPrice: 200000,
-        tickSize: 0.01,
-        exchange: 'binance',
-        ccxtSymbol: 'BTC/USDT'
-      },
-      'EUR/USD': {
-        symbol: 'EUR/USD',
-        name: 'Euro / US Dollar',
-        category: 'forex',
-        baseAsset: 'EUR',
-        quoteAsset: 'USD',
-        minPrice: 0.8000,
-        maxPrice: 1.5000,
-        tickSize: 0.00001,
-        exchange: 'oanda',
-        ccxtSymbol: 'EUR/USD'
-      }
-    };
-    
-    return pairs[symbol];
-  }
-
-  private getSimulatedCandles(symbol: string, timeframe: string): CandleData[] {
-    const symbolCandles = this.candleData.get(symbol);
-    if (symbolCandles) {
-      return symbolCandles.get(timeframe) || [];
+  async placeMarketOrder(symbol: string, side: 'BUY' | 'SELL', quantity: number): Promise<any> {
+    if (!this.apiKey || !this.apiSecret) {
+      throw new Error('API key/secret required for trading');
     }
-    return [];
+    const endpoint = '/api/v3/order';
+    const url = `${BINANCE_API_BASE}${endpoint}`;
+    const timestamp = Date.now();
+    const params = `symbol=${this.toBinanceSymbol(symbol)}&side=${side}&type=MARKET&quantity=${quantity}&timestamp=${timestamp}`;
+    const signature = crypto.createHmac('sha256', this.apiSecret).update(params).digest('hex');
+    try {
+      const res = await axios.post(url + '?' + params + `&signature=${signature}`, null, {
+        headers: {
+          'X-MBX-APIKEY': this.apiKey
+        }
+      });
+      Logger.info(`Market order placed: ${side} ${quantity} ${symbol}`);
+      return res.data;
+    } catch (error) {
+      Logger.error('Failed to place market order:', error);
+      throw error;
+    }
   }
 
-  private getSimulatedMarketData(symbol: string): MarketData {
-    return this.marketData.get(symbol) || {
-      symbol,
-      price: 0,
-      change24h: 0,
-      volume: 0,
-      high24h: 0,
-      low24h: 0,
-      lastUpdate: Date.now()
+  private toBinanceSymbol(symbol: string): string {
+    return symbol.replace('/', '');
+  }
+
+  private mapTimeframe(timeframe: string): string {
+    // Map to Binance intervals
+    const map: Record<string, string> = {
+      '1m': '1m',
+      '5m': '5m',
+      '15m': '15m',
+      '30m': '30m',
+      '1h': '1h',
+      '4h': '4h',
+      '1d': '1d'
     };
+    return map[timeframe] || '1m';
   }
 
   subscribe(symbol: string, timeframe: string, callback: (data: any) => void) {
@@ -405,6 +201,19 @@ class CCXTDataService {
       this.updateIntervals.delete(key);
     }
   }
+
+  private getTimeframeMinutes(timeframe: string): number {
+    const timeframeMap: Record<string, number> = {
+      '1m': 1,
+      '5m': 5,
+      '15m': 15,
+      '30m': 30,
+      '1h': 60,
+      '4h': 240,
+      '1d': 1440
+    };
+    return timeframeMap[timeframe] || 15;
+  }
 }
 
-export default CCXTDataService;
+export default BinanceDataService;

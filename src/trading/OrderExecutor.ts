@@ -2,7 +2,7 @@ import ccxt from 'ccxt';
 import { Observable, Subject, BehaviorSubject } from 'rxjs';
 import { StrategySignal } from './StrategyRunner';
 import Logger from '../utils/logger';
-import ccxtServiceSingleton from '../utils/ccxtServiceSingleton';
+import binanceService from '../utils/ccxtServiceSingleton';
 import type { MarketData } from '../types/trading';
 
 export interface OrderIntent {
@@ -1009,14 +1009,14 @@ export class OrderExecutor {
   }
 
   /**
-   * Get real-time market price using ccxtDataService (live for paper/manual)
+   * Get real-time market price using Binance API (live for paper/manual)
    */
   private async getLiveMarketPrice(symbol: string): Promise<number> {
     try {
-      const marketData: MarketData = await ccxtServiceSingleton.fetchTicker(symbol);
+      const marketData: MarketData = await binanceService.fetchTicker(symbol);
       return marketData.price;
     } catch (e) {
-      Logger.error('Failed to fetch live price from ccxt, falling back to simulation:', e);
+      Logger.error('Failed to fetch live price from Binance, falling back to simulation:', e);
       return this.getSimulatedMarketPrice(symbol);
     }
   }

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getSecret } from '../utils/secretHelper';
 
 export interface NotificationPayload {
   type: 'signal' | 'trade' | 'alert';
@@ -230,16 +231,22 @@ export class NotificationService {
 
   async sendSMSAlert(message: string) {
     // Example: Twilio (add config as needed)
-    if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_FROM || !process.env.TWILIO_TO) return;
-    const url = `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`;
+    const [TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM, TWILIO_TO] = await Promise.all([
+      getSecret('TWILIO_ACCOUNT_SID'),
+      getSecret('TWILIO_AUTH_TOKEN'),
+      getSecret('TWILIO_FROM'),
+      getSecret('TWILIO_TO'),
+    ]);
+    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM || !TWILIO_TO) return;
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`;
     await axios.post(url, new URLSearchParams({
-      From: process.env.TWILIO_FROM,
-      To: process.env.TWILIO_TO,
+      From: TWILIO_FROM,
+      To: TWILIO_TO,
       Body: message,
     }), {
       auth: {
-        username: process.env.TWILIO_ACCOUNT_SID,
-        password: process.env.TWILIO_AUTH_TOKEN,
+        username: TWILIO_ACCOUNT_SID,
+        password: TWILIO_AUTH_TOKEN,
       },
     });
   }
