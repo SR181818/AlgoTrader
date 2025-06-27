@@ -1,493 +1,274 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, Target, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { BinanceMarketData } from '../services/BinanceMarketData';
-import { OrderExecutor } from '../services/OrderExecutor';
-import { CandleData } from '../types/market';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 
-interface Order {
-  id: string;
+interface Trade {
+  id: number;
   symbol: string;
-  side: 'buy' | 'sell';
-  type: 'market' | 'limit' | 'stop';
-  quantity: number;
-  price?: number;
-  stopPrice?: number;
-  status: 'pending' | 'filled' | 'cancelled';
-  timestamp: Date | number;
-  fillPrice?: number;
-  currentPrice?: number;
-  pnl?: number;
+  side: string;
+  amount: string;
+  price: string;
+  pnl: string;
+  status: string;
+  createdAt: string;
 }
 
 export default function ManualTradingPage() {
-  const [marketData] = useState(new BinanceMarketData());
-  const [orderExecutor] = useState(new OrderExecutor());
-  const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
-  const [currentPrice, setCurrentPrice] = useState<number>(0);
-  const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop'>('market');
-  const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
-  const [quantity, setQuantity] = useState<string>('0.001');
-  const [price, setPrice] = useState<string>('');
-  const [stopPrice, setStopPrice] = useState<string>('');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [balance, setBalance] = useState({ USDT: 10000, BTC: 0, ETH: 0 });
+  const [symbol, setSymbol] = useState('BTCUSDT');
+  const [side, setSide] = useState<'buy' | 'sell'>('buy');
+  const [amount, setAmount] = useState('');
+  const [price, setPrice] = useState('');
+  const [type, setType] = useState<'market' | 'limit'>('market');
+  const { toast } = useToast();
 
-  useEffect(() => {
-    const subscription = marketData.subscribeToCandles(selectedSymbol, '1m').subscribe((candles: CandleData[]) => {
-      if (candles.length > 0) {
-        const latestCandle = candles[candles.length - 1];
-        setCurrentPrice(latestCandle.close);
-        if (orderType === 'market' && !price) {
-          setPrice(latestCandle.close.toString());
-        }
+  // Fetch user trades
+  const { data: trades = [], refetch: refetchTrades } = useQuery({
+    queryKey: ['trades'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/trading/trades');
+      return response.json();
+    },
+  });
 
-        // Update current price and PnL for filled orders
-        setOrders(prevOrders =>
-          prevOrders.map(order => {
-            if (order.status === 'filled' && order.symbol === selectedSymbol) {
-              const currentPrice = latestCandle.close;
-              const fillPrice = order.fillPrice || order.price || 0;
-              const pnl = order.side === 'buy'
-                ? (currentPrice - fillPrice) * order.quantity
-                : (fillPrice - currentPrice) * order.quantity;
+  // Execute trade mutation
+  const executeTradeMutation = useMutation({
+    mutationFn: async (tradeData: {
+      symbol: string;
+      side: 'buy' | 'sell';
+      amount: number;
+      type: 'market' | 'limit';
+      price?: number;
+    }) => {
+      const response = await apiRequest('POST', '/api/trading/trade', tradeData);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'Trade Executed',
+        description: `${side.toUpperCase()} ${amount} ${symbol} at $${data.executedPrice}`,
+      });
+      refetchTrades();
+      setAmount('');
+      setPrice('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Trade Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
 
-              return {
-                ...order,
-                currentPrice: currentPrice,
-                pnl: pnl,
-              };
-            }
-            return order;
-          })
-        );
-      }
-    });
-
-    return () => subscription?.unsubscribe();
-  }, [selectedSymbol, orderType, price]);
-
-  const calculateOrderValue = () => {
-    const qty = parseFloat(quantity) || 0;
-    const orderPrice = orderType === 'market' ? currentPrice : (parseFloat(price) || 0);
-    return qty * orderPrice;
-  };
-
-  const validateOrder = () => {
-    const qty = parseFloat(quantity);
-    const orderPrice = orderType === 'market' ? currentPrice : parseFloat(price);
-    const orderValue = qty * orderPrice;
-
-    if (!qty || qty <= 0) return 'Invalid quantity';
-    if (orderType !== 'market' && (!orderPrice || orderPrice <= 0)) return 'Invalid price';
-    if (orderType === 'stop' && (!parseFloat(stopPrice) || parseFloat(stopPrice) <= 0)) return 'Invalid stop price';
-
-    if (orderSide === 'buy' && orderValue > balance.USDT) {
-      return 'Insufficient USDT balance';
-    }
-
-    const symbolBase = selectedSymbol.replace('USDT', '');
-    if (orderSide === 'sell' && qty > (balance as any)[symbolBase]) {
-      return `Insufficient ${symbolBase} balance`;
-    }
-
-    return null;
-  };
-
-  const placeOrder = async () => {
-    const validationError = validateOrder();
-    if (validationError) {
-      setError(validationError);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!amount || parseFloat(amount) <= 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a valid amount',
+        variant: 'destructive',
+      });
       return;
     }
 
-    setIsPlacingOrder(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const orderData = {
-        symbol: selectedSymbol,
-        side: orderSide,
-        type: orderType,
-        quantity: parseFloat(quantity),
-        price: orderType !== 'market' ? parseFloat(price) : undefined,
-        stopPrice: orderType === 'stop' ? parseFloat(stopPrice) : undefined
-      };
-
-      // Simulate order execution (paper trading)
-      const newOrder: Order = {
-        id: `order_${Date.now()}`,
-        ...orderData,
-        status: 'pending',
-        timestamp: Date.now(),
-        fillPrice: orderType === 'market' ? currentPrice : undefined
-      };
-
-      // Add order to list
-      setOrders(prev => [newOrder, ...prev]);
-
-      // Simulate immediate fill for market orders
-      if (orderType === 'market') {
-        setTimeout(() => {
-          setOrders(prev => prev.map(order => 
-            order.id === newOrder.id 
-              ? { ...order, status: 'filled', fillPrice: currentPrice }
-              : order
-          ));
-
-          // Update balance
-          const orderValue = parseFloat(quantity) * currentPrice;
-          const symbolBase = selectedSymbol.replace('USDT', '');
-
-          setBalance(prev => {
-            if (orderSide === 'buy') {
-              return {
-                ...prev,
-                USDT: prev.USDT - orderValue,
-                [symbolBase]: (prev as any)[symbolBase] + parseFloat(quantity)
-              };
-            } else {
-              return {
-                ...prev,
-                USDT: prev.USDT + orderValue,
-                [symbolBase]: (prev as any)[symbolBase] - parseFloat(quantity)
-              };
-            }
-          });
-        }, 1000);
-      }
-
-      setSuccess(`${orderSide.toUpperCase()} order placed successfully`);
-
-      // Reset form
-      setQuantity('0.001');
-      if (orderType !== 'market') setPrice('');
-      if (orderType === 'stop') setStopPrice('');
-
-    } catch (err: any) {
-      setError('Failed to place order: ' + err.message);
-    } finally {
-      setIsPlacingOrder(false);
+    if (type === 'limit' && (!price || parseFloat(price) <= 0)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a valid price for limit orders',
+        variant: 'destructive',
+      });
+      return;
     }
-  };
 
-  const cancelOrder = (orderId: string) => {
-    setOrders(prev => prev.map(order => 
-      order.id === orderId 
-        ? { ...order, status: 'cancelled' }
-        : order
-    ));
-  };
+    const tradeData = {
+      symbol,
+      side,
+      amount: parseFloat(amount),
+      type,
+      ...(type === 'limit' && { price: parseFloat(price) }),
+    };
 
-  const formatCurrency = (value: number) => 
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'filled': return 'text-green-400';
-      case 'cancelled': return 'text-red-400';
-      case 'pending': return 'text-yellow-400';
-      default: return 'text-gray-400';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'filled': return <CheckCircle className="w-4 h-4" />;
-      case 'cancelled': return <AlertTriangle className="w-4 h-4" />;
-      case 'pending': return <Clock className="w-4 h-4" />;
-      default: return null;
-    }
+    executeTradeMutation.mutate(tradeData);
   };
 
   return (
-    <div className="container mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Manual Trading</h1>
-        <div className="text-sm text-gray-400">
-          Paper trading mode - No real money at risk
-        </div>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Manual Trading</h1>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Order Entry */}
-        <div className="xl:col-span-2">
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-6">Place Order</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Symbol & Price */}
-              <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Trading Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Place Order</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
-                  <select 
-                    value={selectedSymbol} 
-                    onChange={(e) => setSelectedSymbol(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg"
-                  >
-                    <option value="BTCUSDT">BTC/USDT</option>
-                    <option value="ETHUSDT">ETH/USDT</option>
-                    <option value="ADAUSDT">ADA/USDT</option>
-                    <option value="SOLUSDT">SOL/USDT</option>
-                  </select>
+                  <Label htmlFor="symbol">Symbol</Label>
+                  <Select value={symbol} onValueChange={setSymbol}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BTCUSDT">BTC/USDT</SelectItem>
+                      <SelectItem value="ETHUSDT">ETH/USDT</SelectItem>
+                      <SelectItem value="ADAUSDT">ADA/USDT</SelectItem>
+                      <SelectItem value="SOLUSDT">SOL/USDT</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Current Price</label>
-                  <div className="bg-gray-700 border border-gray-600 px-3 py-2 rounded-lg">
-                    <span className="text-white font-mono">{formatCurrency(currentPrice)}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Order Type</label>
-                  <div className="flex space-x-2">
-                    {(['market', 'limit', 'stop'] as const).map((type) => (
-                      <button
-                        key={type}
-                        onClick={() => setOrderType(type)}
-                        className={`px-4 py-2 rounded-lg capitalize ${
-                          orderType === type 
-                            ? 'bg-blue-600 text-white' 
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
+                  <Label htmlFor="side">Side</Label>
+                  <Select value={side} onValueChange={(value) => setSide(value as 'buy' | 'sell')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="buy">Buy</SelectItem>
+                      <SelectItem value="sell">Sell</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Order Details */}
-              <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Side</label>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setOrderSide('buy')}
-                      className={`flex-1 py-2 rounded-lg flex items-center justify-center space-x-2 ${
-                        orderSide === 'buy' 
-                          ? 'bg-green-600 text-white' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      <TrendingUp className="w-4 h-4" />
-                      <span>Buy</span>
-                    </button>
-                    <button
-                      onClick={() => setOrderSide('sell')}
-                      className={`flex-1 py-2 rounded-lg flex items-center justify-center space-x-2 ${
-                        orderSide === 'sell' 
-                          ? 'bg-red-600 text-white' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      <TrendingDown className="w-4 h-4" />
-                      <span>Sell</span>
-                    </button>
-                  </div>
+                  <Label htmlFor="type">Order Type</Label>
+                  <Select value={type} onValueChange={(value) => setType(value as 'market' | 'limit')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="market">Market</SelectItem>
+                      <SelectItem value="limit">Limit</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-
+                
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Quantity</label>
-                  <input
+                  <Label htmlFor="amount">Amount</Label>
+                  <Input
+                    id="amount"
                     type="number"
-                    step="0.000001"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg"
-                    placeholder="0.001"
+                    step="0.00001"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    required
                   />
                 </div>
+              </div>
 
-                {orderType !== 'market' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg"
-                      placeholder="Enter price"
-                    />
-                  </div>
-                )}
-
-                {orderType === 'stop' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Stop Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={stopPrice}
-                      onChange={(e) => setStopPrice(e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg"
-                      placeholder="Enter stop price"
-                    />
-                  </div>
-                )}
-
-                <div className="pt-2">
-                  <div className="text-sm text-gray-400 mb-2">
-                    Order Value: {formatCurrency(calculateOrderValue())}
-                  </div>
-                  <button
-                    onClick={placeOrder}
-                    disabled={isPlacingOrder}
-                    className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-                      orderSide === 'buy'
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-red-600 hover:bg-red-700 text-white'
-                    } disabled:opacity-50`}
-                  >
-                    {isPlacingOrder ? 'Placing Order...' : `${orderSide.toUpperCase()} ${selectedSymbol}`}
-                  </button>
+              {type === 'limit' && (
+                <div>
+                  <Label htmlFor="price">Price</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0.00"
+                    required
+                  />
                 </div>
-              </div>
-            </div>
-
-            {error && (
-              <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                <div className="flex items-center space-x-2 text-red-400">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm">{error}</span>
-                </div>
-              </div>
-            )}
-
-            {success && (
-              <div className="mt-4 bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-                <div className="flex items-center space-x-2 text-green-400">
-                  <CheckCircle className="w-4 h-4" />
-                  <span className="text-sm">{success}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Account Balance */}
-        <div className="space-y-6">
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-4">Account Balance</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-400">USDT:</span>
-                <span className="text-white font-mono">{balance.USDT.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">BTC:</span>
-                <span className="text-white font-mono">{balance.BTC.toFixed(6)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">ETH:</span>
-                <span className="text-white font-mono">{balance.ETH.toFixed(6)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-4">Market Info</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Symbol:</span>
-                <span className="text-white">{selectedSymbol}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Price:</span>
-                <span className="text-white font-mono">{formatCurrency(currentPrice)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Mode:</span>
-                <span className="text-yellow-400">Paper Trading</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Orders History */}
-      <div className="mt-8 bg-gray-800 rounded-lg border border-gray-700">
-        <div className="p-6 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">Recent Orders</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Symbol</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Side</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Quantity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {orders.map((order) => (
-                        <tr key={order.id} className="hover:bg-gray-700/50">
-                          <td className="px-6 py-4 text-sm text-gray-300">
-                            {new Date(order.timestamp).toLocaleTimeString()}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-white">{order.symbol}</td>
-                          <td className="px-6 py-4 text-sm">
-                            <span className={`capitalize ${order.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
-                              {order.side}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-300 capitalize">{order.type}</td>
-                          <td className="px-6 py-4 text-sm text-white font-mono">{order.quantity.toFixed(6)}</td>
-                          <td className="px-6 py-4 text-sm text-white font-mono">
-                            <div>
-                              <div>Entry: {formatCurrency(order.fillPrice || order.price)}</div>
-                              {order.currentPrice && order.status === 'filled' && (
-                                <div className="text-xs text-gray-400">
-                                  Current: {formatCurrency(order.currentPrice)}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm">
-                            <div className={`flex items-center space-x-1 ${getStatusColor(order.status)}`}>
-                              {getStatusIcon(order.status)}
-                              <span className="capitalize">{order.status}</span>
-                            </div>
-                            {order.pnl !== undefined && order.status === 'filled' && (
-                              <div className={`text-xs font-mono ${order.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {order.pnl >= 0 ? '+' : ''}{formatCurrency(order.pnl)}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm">
-                            {order.status === 'pending' && (
-                              <button
-                                onClick={() => cancelOrder(order.id)}
-                                className="text-red-400 hover:text-red-300 text-xs"
-                              >
-                                Cancel
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-              {orders.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-400">
-                    No orders placed yet
-                  </td>
-                </tr>
               )}
-            </tbody>
-          </table>
-        </div>
+
+              <Button
+                type="submit"
+                className={`w-full ${side === 'buy' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                disabled={executeTradeMutation.isPending}
+              >
+                {executeTradeMutation.isPending ? 'Processing...' : `${side.toUpperCase()} ${symbol}`}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Live Market Data */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Live Prices</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'].map((pair) => (
+                <div key={pair} className="flex justify-between items-center p-3 bg-muted rounded">
+                  <span className="font-medium">{pair}</span>
+                  <div className="text-right">
+                    <div className="font-bold">Loading...</div>
+                    <div className="text-sm text-muted-foreground">24h: --</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Trade History */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Trade History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">Symbol</th>
+                  <th className="text-left p-2">Side</th>
+                  <th className="text-left p-2">Amount</th>
+                  <th className="text-left p-2">Price</th>
+                  <th className="text-left p-2">PnL</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-left p-2">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trades.length > 0 ? (
+                  trades.map((trade: Trade) => (
+                    <tr key={trade.id} className="border-b">
+                      <td className="p-2">{trade.symbol}</td>
+                      <td className="p-2">
+                        <span className={trade.side === 'buy' ? 'text-green-600' : 'text-red-600'}>
+                          {trade.side.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-2">{trade.amount}</td>
+                      <td className="p-2">${trade.price}</td>
+                      <td className="p-2">
+                        <span className={parseFloat(trade.pnl) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          ${trade.pnl}
+                        </span>
+                      </td>
+                      <td className="p-2">{trade.status}</td>
+                      <td className="p-2">{new Date(trade.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="text-center p-4 text-muted-foreground">
+                      No trades yet. Place your first order above.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -4,70 +4,19 @@ config();
 
 import type { Express } from "express";
 import authRoutes from "./authRoutes";
+import tradingRoutes from "./tradingRoutes";
+import settingsRoutes from "./settingsRoutes";
 import liveSimulationRoutes from "./liveSimulationRoutes";
 
 export function registerRoutes(app: Express) {
-  // Mock auth endpoints
-  app.post("/api/auth/login", async (req, res) => {
-    const { username, password } = req.body;
-    
-    if (username && password) {
-      return res.json({
-        success: true,
-        token: "mock_token_" + Date.now(),
-        user: {
-          id: 1,
-          username,
-          tier: "ai",
-          active: true
-        }
-      });
-    }
-    
-    return res.status(401).json({ success: false, message: "Invalid credentials" });
-  });
-
-  app.post("/api/auth/register", async (req, res) => {
-    const { username, email, password } = req.body;
-    
-    if (username && email && password) {
-      return res.json({
-        success: true,
-        message: "User registered successfully",
-        user: {
-          id: Date.now(),
-          username,
-          email,
-          tier: "free",
-          active: true
-        }
-      });
-    }
-    
-    return res.status(400).json({ success: false, message: "Missing required fields" });
-  });
-
-  app.get("/api/auth/me", async (req, res) => {
-    const token = req.headers.authorization?.replace("Bearer ", "");
-    
-    if (token) {
-      return res.json({
-        success: true,
-        user: {
-          id: 1,
-          username: "demo_user",
-          tier: "ai",
-          active: true
-        }
-      });
-    }
-    
-    return res.status(401).json({ success: false, message: "Unauthorized" });
-  });
-
-  app.post("/api/auth/logout", async (req, res) => {
-    return res.json({ success: true, message: "Logged out successfully" });
-  });
+  // Authentication routes
+  app.use("/api/auth", authRoutes);
+  
+  // Trading routes (protected)
+  app.use("/api/trading", tradingRoutes);
+  
+  // Settings routes (protected)
+  app.use("/api/settings", settingsRoutes);
 
   // Live simulation endpoints
   app.post("/api/live-simulation/account", async (req, res) => {
