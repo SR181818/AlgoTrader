@@ -1,6 +1,6 @@
 import React from 'react';
-import { LiveTradingDashboard } from '@/components/LiveTradingDashboard';
+import { SimpleTradingTest } from '@/components/SimpleTradingTest';
 
 export default function TradingDashboardPage() {
-  return <LiveTradingDashboard />;
+  return <SimpleTradingTest />;
 }

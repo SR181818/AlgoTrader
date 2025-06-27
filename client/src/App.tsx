@@ -42,6 +42,12 @@ function AppContent() {
       if (userSubscription) {
         setSubscription(JSON.parse(userSubscription));
       }
+    } else {
+      // Auto-login for testing purposes
+      localStorage.setItem('userToken', 'demo_user_token');
+      localStorage.setItem('userSubscription', JSON.stringify({ tier: 'ai', active: true }));
+      setIsAuthenticated(true);
+      setSubscription({ tier: 'ai', active: true });
     }
   }, []);
 
@@ -115,7 +121,9 @@ function AppContent() {
         )}
 
         {/* Routes */}
-        <Route path="/" component={LandingPage} />
+        <Route path="/">
+          {isAuthenticated ? <TradingDashboardPage /> : <LandingPage />}
+        </Route>
         <Route path="/login">
           <LoginPage onLogin={handleLogin} />
         </Route>
