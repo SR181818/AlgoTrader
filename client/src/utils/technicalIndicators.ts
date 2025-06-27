@@ -255,3 +255,176 @@ export const generateAllIndicators = (candles: CandleData[]): { [key: string]: I
 //   calculateStochastic,
 //   calculateWilliamsR
 // };
+
+export class TechnicalIndicatorCalculator {
+  // Simple Moving Average
+  static calculateSMA(data: number[], period: number): number[] {
+    const result: number[] = [];
+    for (let i = period - 1; i < data.length; i++) {
+      const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+      result.push(sum / period);
+    }
+    return result;
+  }
+
+  // Exponential Moving Average  
+  static calculateEMA(data: number[], period: number): number[] {
+    const result: number[] = [];
+    const multiplier = 2 / (period + 1);
+
+    if (data.length === 0) return result;
+
+    // First EMA is the first data point
+    result.push(data[0]);
+
+    // Calculate rest using EMA formula
+    for (let i = 1; i < data.length; i++) {
+      const ema = (data[i] * multiplier) + (result[result.length - 1] * (1 - multiplier));
+      result.push(ema);
+    }
+
+    return result;
+  }
+
+  // Average Directional Index (ADX)
+  static calculateADX(high: number[], low: number[], close: number[], period: number = 14): number[] {
+    if (high.length < period + 1) return [];
+
+    const result: number[] = [];
+    const trueRange: number[] = [];
+    const plusDM: number[] = [];
+    const minusDM: number[] = [];
+
+    // Calculate True Range and Directional Movement
+    for (let i = 1; i < high.length; i++) {
+      const tr1 = high[i] - low[i];
+      const tr2 = Math.abs(high[i] - close[i - 1]);
+      const tr3 = Math.abs(low[i] - close[i - 1]);
+      trueRange.push(Math.max(tr1, tr2, tr3));
+
+      const upMove = high[i] - high[i - 1];
+      const downMove = low[i - 1] - low[i];
+
+      plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+      minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
+    }
+
+    // Calculate smoothed values
+    for (let i = period - 1; i < trueRange.length; i++) {
+      const avgTR = trueRange.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0) / period;
+      const avgPlusDM = plusDM.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0) / period;
+      const avgMinusDM = minusDM.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0) / period;
+
+      const plusDI = (avgPlusDM / avgTR) * 100;
+      const minusDI = (avgMinusDM / avgTR) * 100;
+
+      const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
+      result.push(dx);
+    }
+
+    // Calculate ADX (smoothed DX)
+    const adx: number[] = [];
+    for (let i = period - 1; i < result.length; i++) {
+      const avgDX = result.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0) / period;
+      adx.push(avgDX);
+    }
+
+    return adx;
+  }
+
+  // Relative Strength Index
+  static calculateRSI(data: number[], period: number = 14): number[] {
+    const result: number[] = [];
+    const gains: number[] = [];
+    const losses: number[] = [];
+
+    // Calculate price changes
+    for (let i = 1; i < data.length; i++) {
+      const change = data[i] - data[i - 1];
+      gains.push(change > 0 ? change : 0);
+      losses.push(change < 0 ? Math.abs(change) : 0);
+    }
+
+    // Calculate RSI
+    for (let i = period - 1; i < gains.length; i++) {
+      const avgGain = gains.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0) / period;
+      const avgLoss = losses.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0) / period;
+
+      if (avgLoss === 0) {
+        result.push(100);
+      } else {
+        const rs = avgGain / avgLoss;
+        result.push(100 - (100 / (1 + rs)));
+      }
+    }
+
+    return result;
+  }
+
+  // MACD
+  static calculateMACD(data: number[], fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9) {
+    const fastEMA = this.calculateEMA(data, fastPeriod);
+    const slowEMA = this.calculateEMA(data, slowPeriod);
+
+    // MACD line
+    const macdLine: number[] = [];
+    const minLength = Math.min(fastEMA.length, slowEMA.length);
+    for (let i = 0; i < minLength; i++) {
+      macdLine.push(fastEMA[i] - slowEMA[i]);
+    }
+
+    // Signal line
+    const signalLine = this.calculateEMA(macdLine, signalPeriod);
+
+    // Histogram
+    const histogram: number[] = [];
+    for (let i = 0; i < Math.min(macdLine.length, signalLine.length); i++) {
+      histogram.push(macdLine[i] - signalLine[i]);
+    }
+
+    return {
+      macd: macdLine,
+      signal: signalLine,
+      histogram: histogram
+    };
+  }
+
+  // Bollinger Bands
+  static calculateBollingerBands(data: number[], period: number = 20, multiplier: number = 2) {
+    const sma = this.calculateSMA(data, period);
+    const upperBand: number[] = [];
+    const lowerBand: number[] = [];
+
+    for (let i = period - 1; i < data.length; i++) {
+      const slice = data.slice(i - period + 1, i + 1);
+      const mean = sma[i - period + 1];
+      const variance = slice.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / period;
+      const stdDev = Math.sqrt(variance);
+
+      upperBand.push(mean + (multiplier * stdDev));
+      lowerBand.push(mean - (multiplier * stdDev));
+    }
+
+    return {
+      upper: upperBand,
+      middle: sma,
+      lower: lowerBand
+    };
+  }
+
+  // Generate all required indicators for backtesting
+  static generateRequiredIndicators(candles: any[]) {
+    const closes = candles.map(c => c.close);
+    const highs = candles.map(c => c.high);
+    const lows = candles.map(c => c.low);
+
+    return {
+      EMA_12: this.calculateEMA(closes, 12),
+      EMA_26: this.calculateEMA(closes, 26),
+      ADX: this.calculateADX(highs, lows, closes, 14),
+      RSI: this.calculateRSI(closes, 14),
+      MACD: this.calculateMACD(closes),
+      BB: this.calculateBollingerBands(closes)
+    };
+  }
+}

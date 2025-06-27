@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-export default defineConfig({
+const config = defineConfig({
   plugins: [react()],
   define: {
     global: 'globalThis',
@@ -35,4 +35,6 @@ export default defineConfig({
     },
   },
 });
+
+export default config;
 ```

@@ -106,43 +106,60 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
     chartContainerRef.current.innerHTML = '';
 
     try {
-      const chart = createChart(chartContainerRef.current, {
-        width: chartContainerRef.current.clientWidth,
-        height: 400,
-        layout: {
-          background: { type: ColorType.Solid, color: '#1a1a1a' },
-          textColor: '#ffffff',
-        },
-        grid: {
-          vertLines: { color: '#444' },
-          horzLines: { color: '#444' },
-        },
-        rightPriceScale: {
-          borderColor: '#444',
-        },
-        timeScale: {
-          borderColor: '#444',
-        },
-      });
+      const chartContainer = chartContainerRef.current; // reference to chart container
+      const chart = createChart(chartContainer, {
+          width: chartContainer.clientWidth,
+          height: 400,
+          layout: {
+            background: { type: ColorType.Solid, color: '#1a1a1a' },
+            textColor: '#ffffff',
+          },
+          grid: {
+            vertLines: { color: '#444' },
+            horzLines: { color: '#444' },
+          },
+          rightPriceScale: {
+            borderColor: '#444',
+          },
+          timeScale: {
+            borderColor: '#444',
+          },
+        });
 
-      // Ensure chart is properly initialized
-      if (!chart || typeof chart.addLineSeries !== 'function') {
-        console.error('Chart not properly initialized');
-        setError('Chart initialization failed');
-        return;
-      }
+        // Add candlestick series
+        const candlestickSeries = chart.addCandlestickSeries({
+          upColor: '#00ff00',
+          downColor: '#ff0000',
+          borderDownColor: '#ff0000',
+          borderUpColor: '#00ff00',
+          wickDownColor: '#ff0000',
+          wickUpColor: '#00ff00',
+        });
 
-      const lineSeries = chart.addLineSeries({
-        color: '#2563eb',
-        lineWidth: 2,
-      });
+        // Add line series for equity curve
+        const equitySeries = chart.addAreaSeries({
+          topColor: 'rgba(33, 150, 243, 0.56)',
+          bottomColor: 'rgba(33, 150, 243, 0.04)',
+          lineColor: 'rgba(33, 150, 243, 1)',
+          lineWidth: 2,
+        });
 
       const equityData = results.equity.map(point => ({
         time: Math.floor(point.timestamp / 1000),
         value: point.value,
       }));
 
-      lineSeries.setData(equityData);
+      equitySeries.setData(equityData);
+
+      // Sample candlestick data (replace with your actual data)
+      const candleData = sampleData.map(candle => ({
+          time: Math.floor(candle.timestamp / 1000),
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+      }));
+      candlestickSeries.setData(candleData);
       chart.timeScale().fitContent();
 
       const handleResize = () => {
@@ -165,7 +182,7 @@ export function BacktestDashboard({ onResultsGenerated }: BacktestDashboardProps
       console.error('Error creating chart:', error);
       setError(`Failed to create chart: ${error instanceof Error ? error.message : String(error)}`);
     }
-  }, [results]);
+  }, [results, sampleData]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
