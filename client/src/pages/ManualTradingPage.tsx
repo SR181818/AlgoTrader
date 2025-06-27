@@ -13,8 +13,10 @@ interface Order {
   price?: number;
   stopPrice?: number;
   status: 'pending' | 'filled' | 'cancelled';
-  timestamp: Date;
+  timestamp: Date | number;
   fillPrice?: number;
+  currentPrice?: number;
+  pnl?: number;
 }
 
 export default function ManualTradingPage() {
@@ -41,6 +43,26 @@ export default function ManualTradingPage() {
         if (orderType === 'market' && !price) {
           setPrice(latestCandle.close.toString());
         }
+
+        // Update current price and PnL for filled orders
+        setOrders(prevOrders =>
+          prevOrders.map(order => {
+            if (order.status === 'filled' && order.symbol === selectedSymbol) {
+              const currentPrice = latestCandle.close;
+              const fillPrice = order.fillPrice || order.price || 0;
+              const pnl = order.side === 'buy'
+                ? (currentPrice - fillPrice) * order.quantity
+                : (fillPrice - currentPrice) * order.quantity;
+
+              return {
+                ...order,
+                currentPrice: currentPrice,
+                pnl: pnl,
+              };
+            }
+            return order;
+          })
+        );
       }
     });
 
@@ -61,11 +83,11 @@ export default function ManualTradingPage() {
     if (!qty || qty <= 0) return 'Invalid quantity';
     if (orderType !== 'market' && (!orderPrice || orderPrice <= 0)) return 'Invalid price';
     if (orderType === 'stop' && (!parseFloat(stopPrice) || parseFloat(stopPrice) <= 0)) return 'Invalid stop price';
-    
+
     if (orderSide === 'buy' && orderValue > balance.USDT) {
       return 'Insufficient USDT balance';
     }
-    
+
     const symbolBase = selectedSymbol.replace('USDT', '');
     if (orderSide === 'sell' && qty > (balance as any)[symbolBase]) {
       return `Insufficient ${symbolBase} balance`;
@@ -100,7 +122,7 @@ export default function ManualTradingPage() {
         id: `order_${Date.now()}`,
         ...orderData,
         status: 'pending',
-        timestamp: new Date(),
+        timestamp: Date.now(),
         fillPrice: orderType === 'market' ? currentPrice : undefined
       };
 
@@ -115,11 +137,11 @@ export default function ManualTradingPage() {
               ? { ...order, status: 'filled', fillPrice: currentPrice }
               : order
           ));
-          
+
           // Update balance
           const orderValue = parseFloat(quantity) * currentPrice;
           const symbolBase = selectedSymbol.replace('USDT', '');
-          
+
           setBalance(prev => {
             if (orderSide === 'buy') {
               return {
@@ -139,7 +161,7 @@ export default function ManualTradingPage() {
       }
 
       setSuccess(`${orderSide.toUpperCase()} order placed successfully`);
-      
+
       // Reset form
       setQuantity('0.001');
       if (orderType !== 'market') setPrice('');
@@ -195,7 +217,7 @@ export default function ManualTradingPage() {
         <div className="xl:col-span-2">
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <h3 className="text-lg font-semibold text-white mb-6">Place Order</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Symbol & Price */}
               <div className="space-y-4">
@@ -410,39 +432,51 @@ export default function ManualTradingPage() {
             </thead>
             <tbody className="divide-y divide-gray-700">
               {orders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-700/50">
-                  <td className="px-6 py-4 text-sm text-gray-300">
-                    {order.timestamp.toLocaleTimeString()}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-white">{order.symbol}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span className={`capitalize ${order.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
-                      {order.side}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-300 capitalize">{order.type}</td>
-                  <td className="px-6 py-4 text-sm text-white font-mono">{order.quantity}</td>
-                  <td className="px-6 py-4 text-sm text-white font-mono">
-                    {order.fillPrice ? formatCurrency(order.fillPrice) : (order.price ? formatCurrency(order.price) : 'Market')}
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    <div className={`flex items-center space-x-1 ${getStatusColor(order.status)}`}>
-                      {getStatusIcon(order.status)}
-                      <span className="capitalize">{order.status}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    {order.status === 'pending' && (
-                      <button
-                        onClick={() => cancelOrder(order.id)}
-                        className="text-red-400 hover:text-red-300 text-xs"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                        <tr key={order.id} className="hover:bg-gray-700/50">
+                          <td className="px-6 py-4 text-sm text-gray-300">
+                            {new Date(order.timestamp).toLocaleTimeString()}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-white">{order.symbol}</td>
+                          <td className="px-6 py-4 text-sm">
+                            <span className={`capitalize ${order.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
+                              {order.side}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-300 capitalize">{order.type}</td>
+                          <td className="px-6 py-4 text-sm text-white font-mono">{order.quantity.toFixed(6)}</td>
+                          <td className="px-6 py-4 text-sm text-white font-mono">
+                            <div>
+                              <div>Entry: {formatCurrency(order.fillPrice || order.price)}</div>
+                              {order.currentPrice && order.status === 'filled' && (
+                                <div className="text-xs text-gray-400">
+                                  Current: {formatCurrency(order.currentPrice)}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <div className={`flex items-center space-x-1 ${getStatusColor(order.status)}`}>
+                              {getStatusIcon(order.status)}
+                              <span className="capitalize">{order.status}</span>
+                            </div>
+                            {order.pnl !== undefined && order.status === 'filled' && (
+                              <div className={`text-xs font-mono ${order.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {order.pnl >= 0 ? '+' : ''}{formatCurrency(order.pnl)}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            {order.status === 'pending' && (
+                              <button
+                                onClick={() => cancelOrder(order.id)}
+                                className="text-red-400 hover:text-red-300 text-xs"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
               {orders.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-6 py-8 text-center text-gray-400">

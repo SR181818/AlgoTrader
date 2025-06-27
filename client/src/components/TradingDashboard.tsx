@@ -4,6 +4,7 @@ import { OrderExecutor, Position, Order } from '../trading/OrderExecutor';
 import { RiskManager } from '../trading/RiskManager';
 import { CandleData, TradingSignal, Trade, MarketData } from '../types/trading';
 import { realDataService } from '../utils/realDataService';
+import { manualTradingService } from '../services/ManualTradingService';
 import { PnLGauge } from './dashboard/PnLGauge';
 import { OpenPositionsTable } from './dashboard/OpenPositionsTable';
 import { SignalEventLog } from './dashboard/SignalEventLog';
@@ -50,6 +51,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
   const [accountBalance, setAccountBalance] = useState(10000);
   const [dailyPnL, setDailyPnL] = useState(0);
   const [totalPnL, setTotalPnL] = useState(0);
+  const [manualTradingPnL, setManualTradingPnL] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [candleData, setCandleData] = useState<CandleData[]>([]);
   const [marketData, setMarketData] = useState<MarketData | null>(null);
@@ -162,10 +164,55 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
       setTotalPnL(usdtBalance - 10000);
     });
 
+    // Load manual trading orders from localStorage
+    const loadManualOrders = () => {
+      try {
+        const storedOrders = JSON.parse(localStorage.getItem('manualTradingOrders') || '[]');
+        const manualOrders = storedOrders.map((order: any) => ({
+          ...order,
+          timestamp: order.timestamp,
+          executedAmount: order.quantity,
+          executedPrice: order.fillPrice || order.price,
+          status: order.status,
+          intent: {
+            symbol: order.symbol,
+            side: order.side,
+            amount: order.quantity,
+            price: order.price
+          }
+        }));
+        
+        setOrders(prev => {
+          // Merge manual orders with existing orders, avoiding duplicates
+          const existingIds = new Set(prev.map(o => o.id));
+          const newManualOrders = manualOrders.filter((o: any) => !existingIds.has(o.id));
+          return [...prev, ...newManualOrders].sort((a, b) => b.timestamp - a.timestamp);
+        });
+      } catch (error) {
+        console.warn('Failed to load manual trading orders:', error);
+      }
+    };
+
+    loadManualOrders();
+
+    // Subscribe to manual trading PnL
+    const manualPnLSub = manualTradingService.getPnL().subscribe(setManualTradingPnL);
+
+    // Listen for storage changes to update orders in real-time
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'manualTradingOrders') {
+        loadManualOrders();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
     return () => {
       orderSub.unsubscribe();
       positionSub.unsubscribe();
       balanceSub.unsubscribe();
+      manualPnLSub.unsubscribe();
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 
@@ -358,7 +405,7 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     }
   };
 
-  const currentPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0);
+  const currentPnL = positions.reduce((sum, pos) => sum + pos.unrealizedPnL, 0) + manualTradingPnL;
 
   return (
     <div className="space-y-6">
