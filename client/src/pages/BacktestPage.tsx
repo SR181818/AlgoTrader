@@ -25,6 +25,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { StrategyBuilder, CustomStrategy, IndicatorConfig, StrategyRule } from '../components/StrategyBuilder';
 
 interface CandleData {
   timestamp: number;
@@ -65,19 +66,7 @@ interface BacktestResult {
   }>;
 }
 
-interface StrategyConfig {
-  name: string;
-  rsiPeriod: number;
-  rsiOverbought: number;
-  rsiOversold: number;
-  macdFast: number;
-  macdSlow: number;
-  macdSignal: number;
-  emaShort: number;
-  emaLong: number;
-  stopLoss: number;
-  takeProfit: number;
-}
+// Remove old StrategyConfig interface since we're using CustomStrategy from StrategyBuilder
 
 export default function BacktestPage() {
   const [isRunning, setIsRunning] = useState(false);
@@ -88,18 +77,57 @@ export default function BacktestPage() {
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
   const [timeframe, setTimeframe] = useState('1h');
   const [initialBalance, setInitialBalance] = useState(10000);
-  const [strategy, setStrategy] = useState<StrategyConfig>({
-    name: 'RSI + MACD Strategy',
-    rsiPeriod: 14,
-    rsiOverbought: 70,
-    rsiOversold: 30,
-    macdFast: 12,
-    macdSlow: 26,
-    macdSignal: 9,
-    emaShort: 12,
-    emaLong: 26,
-    stopLoss: 0.02,
-    takeProfit: 0.03,
+  const [customStrategy, setCustomStrategy] = useState<CustomStrategy>({
+    name: 'Custom RSI + EMA Strategy',
+    description: 'RSI oversold/overbought with EMA trend confirmation',
+    indicators: [
+      {
+        id: 'rsi_main',
+        type: 'RSI',
+        period: 14,
+        threshold: 70,
+        enabled: true,
+      },
+      {
+        id: 'ema_short',
+        type: 'EMA',
+        period: 12,
+        enabled: true,
+      },
+      {
+        id: 'ema_long',
+        type: 'EMA',
+        period: 26,
+        enabled: true,
+      },
+    ],
+    rules: [
+      {
+        id: 'long_entry',
+        type: 'entry',
+        direction: 'long',
+        conditions: [
+          { indicator: 'rsi_main', operator: '<', value: 30 },
+          { indicator: 'ema_short', operator: '>', value: 0, logicalOperator: 'AND' },
+        ],
+        enabled: true,
+      },
+      {
+        id: 'long_exit',
+        type: 'exit',
+        direction: 'long',
+        conditions: [
+          { indicator: 'rsi_main', operator: '>', value: 70 },
+        ],
+        enabled: true,
+      },
+    ],
+    riskManagement: {
+      stopLoss: 0.02,
+      takeProfit: 0.03,
+      positionSize: 0.95,
+      maxDrawdown: 0.15,
+    },
   });
 
   // Generate sample market data
@@ -152,7 +180,7 @@ export default function BacktestPage() {
     return map[timeframe] || 60 * 60 * 1000;
   };
 
-  // Technical indicators
+  // Advanced technical indicators
   const calculateRSI = (prices: number[], period: number = 14): number[] => {
     const rsi: number[] = [];
     const gains: number[] = [];
@@ -192,10 +220,185 @@ export default function BacktestPage() {
     return ema;
   };
 
-  // Backtesting engine
+  const calculateSMA = (prices: number[], period: number): number[] => {
+    const sma: number[] = [];
+    
+    for (let i = period - 1; i < prices.length; i++) {
+      const sum = prices.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+      sma.push(sum / period);
+    }
+    
+    return sma;
+  };
+
+  const calculateMACD = (prices: number[], fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9) => {
+    const emaFast = calculateEMA(prices, fastPeriod);
+    const emaSlow = calculateEMA(prices, slowPeriod);
+    
+    const macdLine: number[] = [];
+    const startIndex = Math.max(emaFast.length, emaSlow.length) - Math.min(emaFast.length, emaSlow.length);
+    
+    for (let i = startIndex; i < Math.min(emaFast.length, emaSlow.length); i++) {
+      macdLine.push(emaFast[i] - emaSlow[i]);
+    }
+    
+    const signalLine = calculateEMA(macdLine, signalPeriod);
+    const histogram: number[] = [];
+    
+    for (let i = 0; i < Math.min(macdLine.length, signalLine.length); i++) {
+      histogram.push(macdLine[i] - signalLine[i]);
+    }
+    
+    return { macdLine, signalLine, histogram };
+  };
+
+  const calculateBollingerBands = (prices: number[], period: number = 20, multiplier: number = 2) => {
+    const sma = calculateSMA(prices, period);
+    const upperBand: number[] = [];
+    const lowerBand: number[] = [];
+    
+    for (let i = period - 1; i < prices.length; i++) {
+      const slice = prices.slice(i - period + 1, i + 1);
+      const mean = slice.reduce((a, b) => a + b, 0) / period;
+      const variance = slice.reduce((sum, price) => sum + Math.pow(price - mean, 2), 0) / period;
+      const stdDev = Math.sqrt(variance);
+      
+      const smaIndex = i - period + 1;
+      upperBand.push(sma[smaIndex] + (multiplier * stdDev));
+      lowerBand.push(sma[smaIndex] - (multiplier * stdDev));
+    }
+    
+    return { upperBand, middleBand: sma, lowerBand };
+  };
+
+  const calculateStochastic = (candles: CandleData[], kPeriod: number = 14, dPeriod: number = 3) => {
+    const kPercent: number[] = [];
+    
+    for (let i = kPeriod - 1; i < candles.length; i++) {
+      const slice = candles.slice(i - kPeriod + 1, i + 1);
+      const lowestLow = Math.min(...slice.map(c => c.low));
+      const highestHigh = Math.max(...slice.map(c => c.high));
+      const currentClose = candles[i].close;
+      
+      const k = ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
+      kPercent.push(k);
+    }
+    
+    const dPercent = calculateSMA(kPercent, dPeriod);
+    
+    return { kPercent, dPercent };
+  };
+
+  // Calculate all indicators for the strategy
+  const calculateIndicators = (candles: CandleData[], strategy: CustomStrategy) => {
+    const indicators: { [key: string]: number[] } = {};
+    const closePrices = candles.map(c => c.close);
+    
+    for (const indicator of strategy.indicators) {
+      if (!indicator.enabled) continue;
+      
+      switch (indicator.type) {
+        case 'RSI':
+          indicators[indicator.id] = calculateRSI(closePrices, indicator.period);
+          break;
+        case 'EMA':
+          indicators[indicator.id] = calculateEMA(closePrices, indicator.period);
+          break;
+        case 'SMA':
+          indicators[indicator.id] = calculateSMA(closePrices, indicator.period);
+          break;
+        case 'MACD':
+          const macd = calculateMACD(closePrices, indicator.fastPeriod, indicator.slowPeriod, indicator.signalPeriod);
+          indicators[indicator.id] = macd.macdLine;
+          indicators[`${indicator.id}_signal`] = macd.signalLine;
+          indicators[`${indicator.id}_histogram`] = macd.histogram;
+          break;
+        case 'Bollinger':
+          const bb = calculateBollingerBands(closePrices, indicator.period);
+          indicators[`${indicator.id}_upper`] = bb.upperBand;
+          indicators[`${indicator.id}_middle`] = bb.middleBand;
+          indicators[`${indicator.id}_lower`] = bb.lowerBand;
+          break;
+        case 'Stochastic':
+          const stoch = calculateStochastic(candles, indicator.period);
+          indicators[indicator.id] = stoch.kPercent;
+          indicators[`${indicator.id}_d`] = stoch.dPercent;
+          break;
+      }
+    }
+    
+    return indicators;
+  };
+
+  // Evaluate strategy rules
+  const evaluateCondition = (condition: any, indicators: { [key: string]: number[] }, candle: CandleData, index: number, prevCandle?: CandleData) => {
+    const indicatorValues = indicators[condition.indicator];
+    if (!indicatorValues || index >= indicatorValues.length) return false;
+    
+    const currentValue = indicatorValues[index];
+    const prevValue = index > 0 ? indicatorValues[index - 1] : currentValue;
+    
+    switch (condition.operator) {
+      case '>':
+        if (typeof condition.value === 'string') {
+          // Compare with another indicator
+          const otherValues = indicators[condition.value];
+          return otherValues && currentValue > otherValues[index];
+        }
+        return currentValue > condition.value;
+      case '<':
+        if (typeof condition.value === 'string') {
+          const otherValues = indicators[condition.value];
+          return otherValues && currentValue < otherValues[index];
+        }
+        return currentValue < condition.value;
+      case '=':
+        return Math.abs(currentValue - condition.value) < 0.01;
+      case 'cross_above':
+        if (typeof condition.value === 'string') {
+          const otherValues = indicators[condition.value];
+          return otherValues && prevValue <= otherValues[index - 1] && currentValue > otherValues[index];
+        }
+        return prevValue <= condition.value && currentValue > condition.value;
+      case 'cross_below':
+        if (typeof condition.value === 'string') {
+          const otherValues = indicators[condition.value];
+          return otherValues && prevValue >= otherValues[index - 1] && currentValue < otherValues[index];
+        }
+        return prevValue >= condition.value && currentValue < condition.value;
+      default:
+        return false;
+    }
+  };
+
+  const evaluateRule = (rule: StrategyRule, indicators: { [key: string]: number[] }, candle: CandleData, index: number, prevCandle?: CandleData) => {
+    if (!rule.enabled || rule.conditions.length === 0) return false;
+    
+    let result = evaluateCondition(rule.conditions[0], indicators, candle, index, prevCandle);
+    
+    for (let i = 1; i < rule.conditions.length; i++) {
+      const condition = rule.conditions[i];
+      const conditionResult = evaluateCondition(condition, indicators, candle, index, prevCandle);
+      
+      if (condition.logicalOperator === 'OR') {
+        result = result || conditionResult;
+      } else {
+        result = result && conditionResult;
+      }
+    }
+    
+    return result;
+  };
+
+  // Advanced backtesting engine with custom strategy support
   const runBacktest = async (): Promise<void> => {
     if (candles.length === 0) {
       setError('No market data available');
+      return;
+    }
+
+    if (customStrategy.indicators.length === 0) {
+      setError('No indicators configured in strategy');
       return;
     }
 
@@ -205,12 +408,13 @@ export default function BacktestPage() {
     setResults(null);
 
     try {
-      console.log(`Starting backtest with ${candles.length} candles`);
+      console.log(`Starting custom strategy backtest: ${customStrategy.name}`);
+      console.log(`Indicators: ${customStrategy.indicators.map(i => `${i.type}(${i.period})`).join(', ')}`);
+      console.log(`Rules: ${customStrategy.rules.length} entry/exit rules`);
       
-      const closePrices = candles.map(c => c.close);
-      const rsi = calculateRSI(closePrices, strategy.rsiPeriod);
-      const emaShort = calculateEMA(closePrices, strategy.emaShort);
-      const emaLong = calculateEMA(closePrices, strategy.emaLong);
+      // Calculate all indicators
+      const indicators = calculateIndicators(candles, customStrategy);
+      console.log('Calculated indicators:', Object.keys(indicators));
       
       let balance = initialBalance;
       let position: { size: number; entryPrice: number; entryTime: number; type: 'long' | 'short' } | null = null;
@@ -222,75 +426,81 @@ export default function BacktestPage() {
       let winningTrades = 0;
       let totalPnL = 0;
       
+      // Find the starting index (wait for all indicators to be ready)
+      const maxPeriod = Math.max(...customStrategy.indicators.map(i => i.period));
+      const startIndex = maxPeriod;
+      
       // Simulate backtest with progress updates
-      for (let i = Math.max(strategy.rsiPeriod, strategy.emaLong); i < candles.length; i++) {
+      for (let i = startIndex; i < candles.length; i++) {
         const candle = candles[i];
-        const currentRSI = rsi[i - strategy.rsiPeriod] || 50;
-        const currentEMAShort = emaShort[i] || candle.close;
-        const currentEMALong = emaLong[i] || candle.close;
+        const prevCandle = i > 0 ? candles[i - 1] : candle;
         
         // Update progress
         const progressPercent = (i / candles.length) * 100;
         setProgress(progressPercent);
         
-        // Entry conditions
+        // Evaluate entry rules
         if (!position) {
-          // Long entry: RSI oversold + EMA short > EMA long
-          if (currentRSI < strategy.rsiOversold && currentEMAShort > currentEMALong) {
-            const positionSize = balance * 0.95; // Use 95% of balance
-            position = {
-              size: positionSize / candle.close,
-              entryPrice: candle.close,
-              entryTime: candle.timestamp,
-              type: 'long'
-            };
-            console.log(`Long entry at ${candle.close} (RSI: ${currentRSI.toFixed(2)})`);
-          }
-          // Short entry: RSI overbought + EMA short < EMA long
-          else if (currentRSI > strategy.rsiOverbought && currentEMAShort < currentEMALong) {
-            const positionSize = balance * 0.95;
-            position = {
-              size: positionSize / candle.close,
-              entryPrice: candle.close,
-              entryTime: candle.timestamp,
-              type: 'short'
-            };
-            console.log(`Short entry at ${candle.close} (RSI: ${currentRSI.toFixed(2)})`);
+          for (const rule of customStrategy.rules) {
+            if (rule.type === 'entry' && rule.enabled) {
+              const ruleTriggered = evaluateRule(rule, indicators, candle, i, prevCandle);
+              
+              if (ruleTriggered) {
+                const positionSize = balance * customStrategy.riskManagement.positionSize;
+                position = {
+                  size: positionSize / candle.close,
+                  entryPrice: candle.close,
+                  entryTime: candle.timestamp,
+                  type: rule.direction
+                };
+                
+                console.log(`${rule.direction.toUpperCase()} entry at ${candle.close} - Rule: ${rule.id}`);
+                break; // Only one entry at a time
+              }
+            }
           }
         }
         
-        // Exit conditions
+        // Evaluate exit rules and risk management
         if (position) {
           let exitTriggered = false;
           let exitReason = '';
           
+          // Check risk management first
           if (position.type === 'long') {
             const pnlPercent = (candle.close - position.entryPrice) / position.entryPrice;
             
-            // Stop loss or take profit
-            if (pnlPercent <= -strategy.stopLoss) {
+            if (pnlPercent <= -customStrategy.riskManagement.stopLoss) {
               exitTriggered = true;
               exitReason = 'Stop Loss';
-            } else if (pnlPercent >= strategy.takeProfit) {
+            } else if (pnlPercent >= customStrategy.riskManagement.takeProfit) {
               exitTriggered = true;
               exitReason = 'Take Profit';
-            } else if (currentRSI > strategy.rsiOverbought) {
-              exitTriggered = true;
-              exitReason = 'RSI Signal';
             }
           } else {
             const pnlPercent = (position.entryPrice - candle.close) / position.entryPrice;
             
-            // Stop loss or take profit for short
-            if (pnlPercent <= -strategy.stopLoss) {
+            if (pnlPercent <= -customStrategy.riskManagement.stopLoss) {
               exitTriggered = true;
               exitReason = 'Stop Loss';
-            } else if (pnlPercent >= strategy.takeProfit) {
+            } else if (pnlPercent >= customStrategy.riskManagement.takeProfit) {
               exitTriggered = true;
               exitReason = 'Take Profit';
-            } else if (currentRSI < strategy.rsiOversold) {
-              exitTriggered = true;
-              exitReason = 'RSI Signal';
+            }
+          }
+          
+          // Check exit rules if no risk management exit
+          if (!exitTriggered) {
+            for (const rule of customStrategy.rules) {
+              if (rule.type === 'exit' && rule.enabled) {
+                const ruleTriggered = evaluateRule(rule, indicators, candle, i, prevCandle);
+                
+                if (ruleTriggered) {
+                  exitTriggered = true;
+                  exitReason = `Rule: ${rule.id}`;
+                  break;
+                }
+              }
             }
           }
           
@@ -315,7 +525,7 @@ export default function BacktestPage() {
               type: position.type
             });
             
-            console.log(`${position.type} exit at ${candle.close} - PnL: $${pnl.toFixed(2)} (${exitReason})`);
+            console.log(`${position.type.toUpperCase()} exit at ${candle.close} - PnL: $${pnl.toFixed(2)} (${exitReason})`);
             position = null;
           }
         }
@@ -336,6 +546,30 @@ export default function BacktestPage() {
         const drawdown = (maxEquity - currentEquity) / maxEquity;
         if (drawdown > maxDrawdown) {
           maxDrawdown = drawdown;
+        }
+        
+        // Check max drawdown limit
+        if (drawdown > customStrategy.riskManagement.maxDrawdown && position) {
+          console.log(`Max drawdown exceeded (${(drawdown * 100).toFixed(2)}%), closing position`);
+          
+          const pnl = position.type === 'long' 
+            ? (candle.close - position.entryPrice) * position.size
+            : (position.entryPrice - candle.close) * position.size;
+          
+          balance += pnl;
+          
+          trades.push({
+            id: `trade_${trades.length + 1}`,
+            entryTime: position.entryTime,
+            exitTime: candle.timestamp,
+            entryPrice: position.entryPrice,
+            exitPrice: candle.close,
+            quantity: position.size,
+            pnl,
+            type: position.type
+          });
+          
+          position = null;
         }
         
         // Add small delay to show progress
@@ -409,13 +643,13 @@ export default function BacktestPage() {
 
   // Auto-run backtest when data is ready
   useEffect(() => {
-    if (candles.length > 0 && !isRunning) {
+    if (candles.length > 0 && !isRunning && customStrategy.indicators.length > 0) {
       // Auto-run backtest after data loads
       setTimeout(() => {
         runBacktest();
       }, 1000);
     }
-  }, [candles]);
+  }, [candles, customStrategy]);
 
   const formatCurrency = (value: number) => 
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
@@ -489,104 +723,70 @@ export default function BacktestPage() {
         </div>
       )}
 
-      {/* Configuration */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <Settings className="mr-2" size={20} />
-            Market Configuration
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Symbol</label>
-              <select 
-                value={selectedSymbol} 
-                onChange={(e) => setSelectedSymbol(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                disabled={isRunning}
-              >
-                <option value="BTC/USDT">BTC/USDT</option>
-                <option value="ETH/USDT">ETH/USDT</option>
-                <option value="ADA/USDT">ADA/USDT</option>
-                <option value="SOL/USDT">SOL/USDT</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Timeframe</label>
-              <select 
-                value={timeframe} 
-                onChange={(e) => setTimeframe(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                disabled={isRunning}
-              >
-                <option value="1m">1 Minute</option>
-                <option value="5m">5 Minutes</option>
-                <option value="15m">15 Minutes</option>
-                <option value="1h">1 Hour</option>
-                <option value="4h">4 Hours</option>
-                <option value="1d">1 Day</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium mb-2">Initial Balance ($)</label>
-              <input
-                type="number"
-                value={initialBalance}
-                onChange={(e) => setInitialBalance(parseFloat(e.target.value))}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                disabled={isRunning}
-              />
-            </div>
+      {/* Market Configuration */}
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+        <h3 className="text-lg font-semibold mb-4 flex items-center">
+          <Settings className="mr-2" size={20} />
+          Market Configuration
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Symbol</label>
+            <select 
+              value={selectedSymbol} 
+              onChange={(e) => setSelectedSymbol(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+              disabled={isRunning}
+            >
+              <option value="BTC/USDT">BTC/USDT</option>
+              <option value="ETH/USDT">ETH/USDT</option>
+              <option value="ADA/USDT">ADA/USDT</option>
+              <option value="SOL/USDT">SOL/USDT</option>
+            </select>
           </div>
-        </div>
-
-        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4">Strategy Parameters</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">RSI Period</label>
-              <input
-                type="number"
-                value={strategy.rsiPeriod}
-                onChange={(e) => setStrategy({...strategy, rsiPeriod: parseInt(e.target.value)})}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                disabled={isRunning}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">RSI Oversold</label>
-              <input
-                type="number"
-                value={strategy.rsiOversold}
-                onChange={(e) => setStrategy({...strategy, rsiOversold: parseFloat(e.target.value)})}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                disabled={isRunning}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">RSI Overbought</label>
-              <input
-                type="number"
-                value={strategy.rsiOverbought}
-                onChange={(e) => setStrategy({...strategy, rsiOverbought: parseFloat(e.target.value)})}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                disabled={isRunning}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Stop Loss (%)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={strategy.stopLoss * 100}
-                onChange={(e) => setStrategy({...strategy, stopLoss: parseFloat(e.target.value) / 100})}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
-                disabled={isRunning}
-              />
+          <div>
+            <label className="block text-sm font-medium mb-2">Timeframe</label>
+            <select 
+              value={timeframe} 
+              onChange={(e) => setTimeframe(e.target.value)}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+              disabled={isRunning}
+            >
+              <option value="1m">1 Minute</option>
+              <option value="5m">5 Minutes</option>
+              <option value="15m">15 Minutes</option>
+              <option value="1h">1 Hour</option>
+              <option value="4h">4 Hours</option>
+              <option value="1d">1 Day</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Initial Balance ($)</label>
+            <input
+              type="number"
+              value={initialBalance}
+              onChange={(e) => setInitialBalance(parseFloat(e.target.value))}
+              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+              disabled={isRunning}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Data Status</label>
+            <div className="flex items-center space-x-2 mt-2">
+              <div className={`w-3 h-3 rounded-full ${candles.length > 0 ? 'bg-green-400' : 'bg-red-400'}`}></div>
+              <span className="text-sm text-gray-300">{candles.length} candles</span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Strategy Builder */}
+      <StrategyBuilder
+        strategy={customStrategy}
+        onStrategyChange={setCustomStrategy}
+        onTestStrategy={runBacktest}
+        isRunning={isRunning}
+      />
 
       {/* Progress */}
       {isRunning && (
@@ -762,6 +962,8 @@ export default function BacktestPage() {
             <span>Data: {candles.length} candles</span>
             <span>Symbol: {selectedSymbol}</span>
             <span>Timeframe: {timeframe}</span>
+            <span>Indicators: {customStrategy.indicators.filter(i => i.enabled).length}</span>
+            <span>Rules: {customStrategy.rules.filter(r => r.enabled).length}</span>
           </div>
         </div>
       </div>
