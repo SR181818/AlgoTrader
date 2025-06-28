@@ -9,7 +9,8 @@ export interface ManualTrade {
   quantity: number;
   price: number;
   fillPrice?: number;
-  status: 'pending' | 'filled' | 'cancelled';
+  entryPrice?: number;
+  status: 'pending' | 'filled' | 'cancelled' | 'open';
   timestamp: number;
   pnl?: number;
   currentPrice?: number;
@@ -113,6 +114,7 @@ class ManualTradingService {
       id: `manual_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       timestamp: Date.now(),
       fillPrice: trade.type === 'market' ? trade.price : undefined,
+      entryPrice: trade.price,
       status: trade.type === 'market' ? 'filled' : trade.status
     };
 

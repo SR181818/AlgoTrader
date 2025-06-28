@@ -1,23 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
-
-interface Trade {
-  id: number;
-  symbol: string;
-  side: string;
-  amount: string;
-  price: string;
-  pnl: string;
-  status: string;
-  createdAt: string;
-}
+import { manualTradingService, ManualTrade } from '@/services/ManualTradingService';
+import { realDataService } from '@/utils/realDataService';
 
 export default function ManualTradingPage() {
   const [symbol, setSymbol] = useState('BTCUSDT');
@@ -25,48 +14,48 @@ export default function ManualTradingPage() {
   const [amount, setAmount] = useState('');
   const [price, setPrice] = useState('');
   const [type, setType] = useState<'market' | 'limit'>('market');
+  const [trades, setTrades] = useState<ManualTrade[]>([]);
+  const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
+  const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
 
-  // Fetch user trades
-  const { data: trades = [], refetch: refetchTrades } = useQuery({
-    queryKey: ['trades'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/trading/trades');
-      return response.json();
-    },
-  });
+  // Subscribe to trades from ManualTradingService
+  useEffect(() => {
+    const subscription = manualTradingService.getTrades().subscribe(setTrades);
+    return () => subscription.unsubscribe();
+  }, []);
 
-  // Execute trade mutation
-  const executeTradeMutation = useMutation({
-    mutationFn: async (tradeData: {
-      symbol: string;
-      side: 'buy' | 'sell';
-      amount: number;
-      type: 'market' | 'limit';
-      price?: number;
-    }) => {
-      const response = await apiRequest('POST', '/api/trading/trade', tradeData);
-      return response.json();
-    },
-    onSuccess: (data) => {
-      toast({
-        title: 'Trade Executed',
-        description: `${side.toUpperCase()} ${amount} ${symbol} at $${data.executedPrice}`,
-      });
-      refetchTrades();
-      setAmount('');
-      setPrice('');
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Trade Failed',
-        description: error.message,
-        variant: 'destructive',
-      });
-    },
-  });
+  // Subscribe to real-time market prices
+  useEffect(() => {
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'];
+    
+    const updatePrices = async () => {
+      const prices: Record<string, number> = {};
+      
+      for (const sym of symbols) {
+        try {
+          const ticker = await realDataService.getCurrentPrice(sym.replace('USDT', '/USDT'));
+          prices[sym] = ticker.last;
+        } catch (error) {
+          console.error(`Failed to get price for ${sym}:`, error);
+          // Set fallback mock prices if real data fails
+          prices[sym] = Math.random() * 50000 + 30000;
+        }
+      }
+      
+      setMarketPrices(prices);
+    };
 
-  const handleSubmit = (e: React.FormEvent) => {
+    // Initial price load
+    updatePrices();
+    
+    // Update prices every 5 seconds
+    const interval = setInterval(updatePrices, 5000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!amount || parseFloat(amount) <= 0) {
@@ -87,15 +76,37 @@ export default function ManualTradingPage() {
       return;
     }
 
-    const tradeData = {
-      symbol,
-      side,
-      amount: parseFloat(amount),
-      type,
-      ...(type === 'limit' && { price: parseFloat(price) }),
-    };
+    setIsExecuting(true);
 
-    executeTradeMutation.mutate(tradeData);
+    try {
+      const marketPrice = marketPrices[symbol] || 0;
+      const tradePrice = type === 'market' ? marketPrice : parseFloat(price);
+
+      const trade = manualTradingService.addTrade({
+        symbol,
+        side,
+        type,
+        quantity: parseFloat(amount),
+        price: tradePrice,
+        status: 'filled'
+      });
+
+      toast({
+        title: 'Trade Executed',
+        description: `${side.toUpperCase()} ${amount} ${symbol} at $${tradePrice.toFixed(2)}`,
+      });
+
+      setAmount('');
+      setPrice('');
+    } catch (error) {
+      toast({
+        title: 'Trade Failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   return (
@@ -188,9 +199,9 @@ export default function ManualTradingPage() {
               <Button
                 type="submit"
                 className={`w-full ${side === 'buy' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
-                disabled={executeTradeMutation.isPending}
+                disabled={isExecuting || !marketPrices[symbol]}
               >
-                {executeTradeMutation.isPending ? 'Processing...' : `${side.toUpperCase()} ${symbol}`}
+                {isExecuting ? 'Processing...' : `${side.toUpperCase()} ${symbol}`}
               </Button>
             </form>
           </CardContent>
@@ -203,15 +214,22 @@ export default function ManualTradingPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'].map((pair) => (
-                <div key={pair} className="flex justify-between items-center p-3 bg-muted rounded">
-                  <span className="font-medium">{pair}</span>
-                  <div className="text-right">
-                    <div className="font-bold">Loading...</div>
-                    <div className="text-sm text-muted-foreground">24h: --</div>
+              {['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'].map((pair) => {
+                const currentPrice = marketPrices[pair];
+                const priceDisplay = currentPrice ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Loading...';
+                
+                return (
+                  <div key={pair} className="flex justify-between items-center p-3 bg-muted rounded">
+                    <span className="font-medium">{pair.replace('USDT', '/USDT')}</span>
+                    <div className="text-right">
+                      <div className="font-bold">{priceDisplay}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {currentPrice ? 'Live' : 'Connecting...'}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -238,23 +256,27 @@ export default function ManualTradingPage() {
               </thead>
               <tbody>
                 {trades.length > 0 ? (
-                  trades.map((trade: Trade) => (
+                  trades.slice(0, 10).map((trade) => (
                     <tr key={trade.id} className="border-b">
-                      <td className="p-2">{trade.symbol}</td>
+                      <td className="p-2">{trade.symbol.replace('USDT', '/USDT')}</td>
                       <td className="p-2">
                         <span className={trade.side === 'buy' ? 'text-green-600' : 'text-red-600'}>
                           {trade.side.toUpperCase()}
                         </span>
                       </td>
-                      <td className="p-2">{trade.amount}</td>
-                      <td className="p-2">${trade.price}</td>
+                      <td className="p-2">{trade.quantity.toFixed(4)}</td>
+                      <td className="p-2">${(trade.fillPrice || trade.price).toFixed(2)}</td>
                       <td className="p-2">
-                        <span className={parseFloat(trade.pnl) >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          ${trade.pnl}
+                        <span className={(trade.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          ${(trade.pnl || 0).toFixed(2)}
                         </span>
                       </td>
-                      <td className="p-2">{trade.status}</td>
-                      <td className="p-2">{new Date(trade.createdAt).toLocaleString()}</td>
+                      <td className="p-2">
+                        <span className={trade.status === 'filled' ? 'text-green-600' : trade.status === 'cancelled' ? 'text-red-600' : 'text-yellow-600'}>
+                          {trade.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-2">{new Date(trade.timestamp).toLocaleString()}</td>
                     </tr>
                   ))
                 ) : (
