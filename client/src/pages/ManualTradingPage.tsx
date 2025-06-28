@@ -19,6 +19,23 @@ export default function ManualTradingPage() {
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
 
+  // Handle order cancellation
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      manualTradingService.cancelOrder(orderId);
+      toast({
+        title: 'Order Cancelled',
+        description: 'Order has been successfully cancelled',
+      });
+    } catch (error) {
+      toast({
+        title: 'Cancellation Failed',
+        description: error instanceof Error ? error.message : 'Failed to cancel order',
+        variant: 'destructive',
+      });
+    }
+  };
+
   // Subscribe to trades from ManualTradingService
   useEffect(() => {
     const subscription = manualTradingService.getTrades().subscribe(setTrades);
@@ -92,23 +109,23 @@ export default function ManualTradingPage() {
     setIsExecuting(true);
 
     try {
-      const marketPrice = marketPrices[symbol] || 0;
-      const tradePrice = type === 'market' ? marketPrice : parseFloat(price);
+      let trade;
+      const orderAmount = parseFloat(amount);
+      const limitPrice = type === 'limit' ? parseFloat(price) : undefined;
 
-      const trade = manualTradingService.addTrade({
-        symbol,
-        side,
-        type,
-        quantity: parseFloat(amount),
-        price: tradePrice,
-        status: 'filled'
-      });
+      // Use enhanced buy/sell API methods
+      if (side === 'buy') {
+        trade = await manualTradingService.executeBuyOrder(symbol, orderAmount, type, limitPrice);
+      } else {
+        trade = await manualTradingService.executeSellOrder(symbol, orderAmount, type, limitPrice);
+      }
 
       toast({
         title: 'Trade Executed',
-        description: `${side.toUpperCase()} ${amount} ${symbol} at $${tradePrice.toFixed(2)}`,
+        description: `${side.toUpperCase()} ${amount} ${symbol} at $${trade.price.toFixed(2)}`,
       });
 
+      // Reset form
       setAmount('');
       setPrice('');
     } catch (error) {
@@ -265,6 +282,7 @@ export default function ManualTradingPage() {
                   <th className="text-left p-2">PnL</th>
                   <th className="text-left p-2">Status</th>
                   <th className="text-left p-2">Time</th>
+                  <th className="text-left p-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -290,11 +308,23 @@ export default function ManualTradingPage() {
                         </span>
                       </td>
                       <td className="p-2">{new Date(trade.timestamp).toLocaleString()}</td>
+                      <td className="p-2">
+                        {trade.status === 'pending' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCancelOrder(trade.id)}
+                            className="text-xs"
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="text-center p-4 text-muted-foreground">
+                    <td colSpan={8} className="text-center p-4 text-muted-foreground">
                       No trades yet. Place your first order above.
                     </td>
                   </tr>
