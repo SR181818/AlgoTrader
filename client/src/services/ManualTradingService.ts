@@ -1,4 +1,3 @@
-
 import { Subject, BehaviorSubject } from 'rxjs';
 
 export interface ManualTrade {
@@ -41,12 +40,12 @@ class ManualTradingService {
     try {
       const storedTrades = localStorage.getItem('manualTrades');
       const storedBalance = localStorage.getItem('manualBalance');
-      
+
       if (storedTrades) {
         const trades = JSON.parse(storedTrades);
         this.tradesSubject.next(trades);
       }
-      
+
       if (storedBalance) {
         const balance = JSON.parse(storedBalance);
         this.balanceSubject.next(balance);
@@ -75,13 +74,13 @@ class ManualTradingService {
   private updatePnL() {
     const trades = this.tradesSubject.value;
     const filledTrades = trades.filter(t => t.status === 'filled');
-    
+
     let totalPnL = 0;
     const updatedTrades = filledTrades.map(trade => {
       // Simulate price movement (±2% random movement)
       const priceChange = (Math.random() - 0.5) * 0.04; // ±2%
       const currentPrice = trade.fillPrice! * (1 + priceChange);
-      
+
       // Calculate PnL
       let pnl = 0;
       if (trade.side === 'buy') {
@@ -89,9 +88,9 @@ class ManualTradingService {
       } else {
         pnl = (trade.fillPrice! - currentPrice) * trade.quantity;
       }
-      
+
       totalPnL += pnl;
-      
+
       return {
         ...trade,
         currentPrice,
@@ -102,7 +101,7 @@ class ManualTradingService {
     // Update other trades that haven't changed
     const otherTrades = trades.filter(t => t.status !== 'filled');
     const allTrades = [...updatedTrades, ...otherTrades];
-    
+
     this.tradesSubject.next(allTrades);
     this.pnlSubject.next(totalPnL);
     this.saveToStorage();
@@ -130,13 +129,13 @@ class ManualTradingService {
     // Also save to legacy format for backward compatibility
     this.saveLegacyFormat(newTrade);
     this.saveToStorage();
-    
+
     // Trigger storage event for cross-component updates
     window.dispatchEvent(new StorageEvent('storage', { 
       key: 'manualTrades', 
       newValue: JSON.stringify(updatedTrades) 
     }));
-    
+
     return newTrade;
   }
 
@@ -156,7 +155,7 @@ class ManualTradingService {
         pnl: trade.pnl,
         currentPrice: trade.currentPrice
       };
-      
+
       legacyOrders.unshift(legacyOrder);
       localStorage.setItem('manualTradingOrders', JSON.stringify(legacyOrders.slice(0, 100))); // Keep last 100
     } catch (error) {
@@ -212,6 +211,56 @@ class ManualTradingService {
     this.pnlSubject.next(0);
     localStorage.removeItem('manualTrades');
     localStorage.removeItem('manualBalance');
+  }
+
+  // Get real-time price from Binance API
+  async getRealTimePrice(symbol: string): Promise<number> {
+    try {
+      const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+      const data = await response.json();
+
+      if (data.code) {
+        throw new Error(`Binance API Error: ${data.msg}`);
+      }
+
+      return parseFloat(data.price);
+    } catch (error) {
+      console.error(`Failed to get real-time price for ${symbol}:`, error);
+      throw error;
+    }
+  }
+
+  // Get real-time 24hr ticker data
+  async getRealTimeTicker(symbol: string): Promise<{
+    symbol: string;
+    price: number;
+    change: number;
+    changePercent: number;
+    volume: number;
+    high: number;
+    low: number;
+  }> {
+    try {
+      const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+      const data = await response.json();
+
+      if (data.code) {
+        throw new Error(`Binance API Error: ${data.msg}`);
+      }
+
+      return {
+        symbol: data.symbol,
+        price: parseFloat(data.lastPrice),
+        change: parseFloat(data.priceChange),
+        changePercent: parseFloat(data.priceChangePercent),
+        volume: parseFloat(data.volume),
+        high: parseFloat(data.highPrice),
+        low: parseFloat(data.lowPrice)
+      };
+    } catch (error) {
+      console.error(`Failed to get real-time ticker for ${symbol}:`, error);
+      throw error;
+    }
   }
 }
 

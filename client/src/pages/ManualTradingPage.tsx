@@ -27,37 +27,50 @@ export default function ManualTradingPage() {
 
   // Subscribe to real-time market prices
   useEffect(() => {
-    const symbols = ['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'];
-    
     const updatePrices = async () => {
-      const prices: Record<string, number> = {};
-      
-      for (const sym of symbols) {
+      const symbols = ['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'];
+      const newPrices: { [key: string]: number } = {};
+
+      for (const symbol of symbols) {
         try {
-          const ticker = await realDataService.getCurrentPrice(sym.replace('USDT', '/USDT'));
-          prices[sym] = ticker.last;
+          // Use direct Binance API call for real prices
+          const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+          const data = await response.json();
+
+          if (data.price) {
+            newPrices[symbol] = parseFloat(data.price);
+          } else {
+            // Fallback to binanceMarketData if direct API fails
+            const price = await realDataService.getCurrentPrice(symbol);
+            newPrices[symbol] = price.last;
+          }
         } catch (error) {
-          console.error(`Failed to get price for ${sym}:`, error);
-          // Set fallback mock prices if real data fails
-          prices[sym] = Math.random() * 50000 + 30000;
+          console.error(`Failed to get price for ${symbol}:`, error);
+          // Use last known price or fallback
+          try {
+            const ticker = await realDataService.getCurrentPrice(symbol.replace('USDT', '/USDT'));
+            newPrices[symbol] = ticker.last;
+          } catch (fallbackError) {
+            console.error(`Fallback price fetch failed for ${symbol}:`, fallbackError);
+          }
         }
       }
-      
-      setMarketPrices(prices);
+
+      setMarketPrices(newPrices);
     };
 
-    // Initial price load
+    // Initial load
     updatePrices();
-    
-    // Update prices every 5 seconds
-    const interval = setInterval(updatePrices, 5000);
-    
+
+    // Update every 2 seconds for more real-time data
+    const interval = setInterval(updatePrices, 2000);
+
     return () => clearInterval(interval);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!amount || parseFloat(amount) <= 0) {
       toast({
         title: 'Validation Error',
@@ -138,7 +151,7 @@ export default function ManualTradingPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <div>
                   <Label htmlFor="side">Side</Label>
                   <Select value={side} onValueChange={(value) => setSide(value as 'buy' | 'sell')}>
@@ -166,7 +179,7 @@ export default function ManualTradingPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 <div>
                   <Label htmlFor="amount">Amount</Label>
                   <Input
@@ -217,7 +230,7 @@ export default function ManualTradingPage() {
               {['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'].map((pair) => {
                 const currentPrice = marketPrices[pair];
                 const priceDisplay = currentPrice ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Loading...';
-                
+
                 return (
                   <div key={pair} className="flex justify-between items-center p-3 bg-muted rounded">
                     <span className="font-medium">{pair.replace('USDT', '/USDT')}</span>
