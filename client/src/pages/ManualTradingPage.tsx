@@ -1,493 +1,610 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, Target, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { BinanceMarketData } from '../services/BinanceMarketData';
-import { OrderExecutor } from '../services/OrderExecutor';
-import { CandleData } from '../types/market';
-
-interface Order {
-  id: string;
-  symbol: string;
-  side: 'buy' | 'sell';
-  type: 'market' | 'limit' | 'stop';
-  quantity: number;
-  price?: number;
-  stopPrice?: number;
-  status: 'pending' | 'filled' | 'cancelled';
-  timestamp: Date | number;
-  fillPrice?: number;
-  currentPrice?: number;
-  pnl?: number;
-}
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { manualTradingService, ManualTrade } from '@/services/ManualTradingService';
+import { realDataService } from '@/utils/realDataService';
 
 export default function ManualTradingPage() {
-  const [marketData] = useState(new BinanceMarketData());
-  const [orderExecutor] = useState(new OrderExecutor());
-  const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
-  const [currentPrice, setCurrentPrice] = useState<number>(0);
-  const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop'>('market');
-  const [orderSide, setOrderSide] = useState<'buy' | 'sell'>('buy');
-  const [quantity, setQuantity] = useState<string>('0.001');
-  const [price, setPrice] = useState<string>('');
-  const [stopPrice, setStopPrice] = useState<string>('');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [balance, setBalance] = useState({ USDT: 10000, BTC: 0, ETH: 0 });
+  const [symbol, setSymbol] = useState('BTCUSDT');
+  const [side, setSide] = useState<'buy' | 'sell'>('buy');
+  const [amount, setAmount] = useState('');
+  const [price, setPrice] = useState('');
+  const [type, setType] = useState<'market' | 'limit'>('market');
+  const [trades, setTrades] = useState<ManualTrade[]>([]);
+  const [marketPrices, setMarketPrices] = useState<Record<string, number>>({});
+  const [balance, setBalance] = useState({ USDT: 10000, BTC: 0, ETH: 0, ADA: 0, SOL: 0, DOT: 0 });
+  const [isExecuting, setIsExecuting] = useState(false);
+  const { toast } = useToast();
 
+  // Handle order cancellation
+  const handleCancelOrder = async (orderId: string) => {
+    try {
+      manualTradingService.cancelOrder(orderId);
+      toast({
+        title: 'Order Cancelled',
+        description: 'Order has been successfully cancelled',
+      });
+    } catch (error) {
+      toast({
+        title: 'Cancellation Failed',
+        description: error instanceof Error ? error.message : 'Failed to cancel order',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Subscribe to trades and balance from ManualTradingService
   useEffect(() => {
-    const subscription = marketData.subscribeToCandles(selectedSymbol, '1m').subscribe((candles: CandleData[]) => {
-      if (candles.length > 0) {
-        const latestCandle = candles[candles.length - 1];
-        setCurrentPrice(latestCandle.close);
-        if (orderType === 'market' && !price) {
-          setPrice(latestCandle.close.toString());
+    const tradesSubscription = manualTradingService.getTrades().subscribe(setTrades);
+    const balanceSubscription = manualTradingService.getBalance().subscribe(setBalance);
+    return () => {
+      tradesSubscription.unsubscribe();
+      balanceSubscription.unsubscribe();
+    };
+  }, []);
+
+  // Subscribe to real-time market prices
+  useEffect(() => {
+    const updatePrices = async () => {
+      const symbols = ['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'];
+      const newPrices: { [key: string]: number } = {};
+
+      for (const symbol of symbols) {
+        try {
+          // Use direct Binance API call for real prices
+          const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+          const data = await response.json();
+
+          if (data.price) {
+            newPrices[symbol] = parseFloat(data.price);
+          } else {
+            // Fallback to binanceMarketData if direct API fails
+            const price = await realDataService.getCurrentPrice(symbol);
+            newPrices[symbol] = price.last;
+          }
+        } catch (error) {
+          console.error(`Failed to get price for ${symbol}:`, error);
+          // Use last known price or fallback
+          try {
+            const ticker = await realDataService.getCurrentPrice(symbol.replace('USDT', '/USDT'));
+            newPrices[symbol] = ticker.last;
+          } catch (fallbackError) {
+            console.error(`Fallback price fetch failed for ${symbol}:`, fallbackError);
+          }
         }
-
-        // Update current price and PnL for filled orders
-        setOrders(prevOrders =>
-          prevOrders.map(order => {
-            if (order.status === 'filled' && order.symbol === selectedSymbol) {
-              const currentPrice = latestCandle.close;
-              const fillPrice = order.fillPrice || order.price || 0;
-              const pnl = order.side === 'buy'
-                ? (currentPrice - fillPrice) * order.quantity
-                : (fillPrice - currentPrice) * order.quantity;
-
-              return {
-                ...order,
-                currentPrice: currentPrice,
-                pnl: pnl,
-              };
-            }
-            return order;
-          })
-        );
       }
-    });
 
-    return () => subscription?.unsubscribe();
-  }, [selectedSymbol, orderType, price]);
+      setMarketPrices(newPrices);
+    };
 
-  const calculateOrderValue = () => {
-    const qty = parseFloat(quantity) || 0;
-    const orderPrice = orderType === 'market' ? currentPrice : (parseFloat(price) || 0);
-    return qty * orderPrice;
-  };
+    // Initial load
+    updatePrices();
 
-  const validateOrder = () => {
-    const qty = parseFloat(quantity);
-    const orderPrice = orderType === 'market' ? currentPrice : parseFloat(price);
-    const orderValue = qty * orderPrice;
+    // Update every 2 seconds for more real-time data
+    const interval = setInterval(updatePrices, 2000);
 
-    if (!qty || qty <= 0) return 'Invalid quantity';
-    if (orderType !== 'market' && (!orderPrice || orderPrice <= 0)) return 'Invalid price';
-    if (orderType === 'stop' && (!parseFloat(stopPrice) || parseFloat(stopPrice) <= 0)) return 'Invalid stop price';
+    return () => clearInterval(interval);
+  }, []);
 
-    if (orderSide === 'buy' && orderValue > balance.USDT) {
-      return 'Insufficient USDT balance';
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-    const symbolBase = selectedSymbol.replace('USDT', '');
-    if (orderSide === 'sell' && qty > (balance as any)[symbolBase]) {
-      return `Insufficient ${symbolBase} balance`;
-    }
-
-    return null;
-  };
-
-  const placeOrder = async () => {
-    const validationError = validateOrder();
-    if (validationError) {
-      setError(validationError);
+    if (!amount || parseFloat(amount) <= 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a valid amount',
+        variant: 'destructive',
+      });
       return;
     }
 
-    setIsPlacingOrder(true);
-    setError(null);
-    setSuccess(null);
+    if (type === 'limit' && (!price || parseFloat(price) <= 0)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a valid price for limit orders',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Additional validation for sell orders
+    if (side === 'sell') {
+      const baseCurrency = symbol.replace('USDT', '');
+      const availableAmount = balance[baseCurrency] || 0;
+      if (availableAmount < parseFloat(amount)) {
+        toast({
+          title: 'Insufficient Balance',
+          description: `You only have ${availableAmount.toFixed(6)} ${baseCurrency} available`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    setIsExecuting(true);
 
     try {
-      const orderData = {
-        symbol: selectedSymbol,
-        side: orderSide,
-        type: orderType,
-        quantity: parseFloat(quantity),
-        price: orderType !== 'market' ? parseFloat(price) : undefined,
-        stopPrice: orderType === 'stop' ? parseFloat(stopPrice) : undefined
-      };
+      let trade;
+      const orderAmount = parseFloat(amount);
+      const limitPrice = type === 'limit' ? parseFloat(price) : undefined;
 
-      // Simulate order execution (paper trading)
-      const newOrder: Order = {
-        id: `order_${Date.now()}`,
-        ...orderData,
-        status: 'pending',
-        timestamp: Date.now(),
-        fillPrice: orderType === 'market' ? currentPrice : undefined
-      };
-
-      // Add order to list
-      setOrders(prev => [newOrder, ...prev]);
-
-      // Simulate immediate fill for market orders
-      if (orderType === 'market') {
-        setTimeout(() => {
-          setOrders(prev => prev.map(order => 
-            order.id === newOrder.id 
-              ? { ...order, status: 'filled', fillPrice: currentPrice }
-              : order
-          ));
-
-          // Update balance
-          const orderValue = parseFloat(quantity) * currentPrice;
-          const symbolBase = selectedSymbol.replace('USDT', '');
-
-          setBalance(prev => {
-            if (orderSide === 'buy') {
-              return {
-                ...prev,
-                USDT: prev.USDT - orderValue,
-                [symbolBase]: (prev as any)[symbolBase] + parseFloat(quantity)
-              };
-            } else {
-              return {
-                ...prev,
-                USDT: prev.USDT + orderValue,
-                [symbolBase]: (prev as any)[symbolBase] - parseFloat(quantity)
-              };
-            }
-          });
-        }, 1000);
+      // Use enhanced buy/sell API methods
+      if (side === 'buy') {
+        trade = await manualTradingService.executeBuyOrder(symbol, orderAmount, type, limitPrice);
+      } else {
+        trade = await manualTradingService.executeSellOrder(symbol, orderAmount, type, limitPrice);
       }
 
-      setSuccess(`${orderSide.toUpperCase()} order placed successfully`);
+      toast({
+        title: 'Trade Executed',
+        description: `${side.toUpperCase()} ${amount} ${symbol} at $${trade.price.toFixed(2)}`,
+      });
 
       // Reset form
-      setQuantity('0.001');
-      if (orderType !== 'market') setPrice('');
-      if (orderType === 'stop') setStopPrice('');
-
-    } catch (err: any) {
-      setError('Failed to place order: ' + err.message);
+      setAmount('');
+      setPrice('');
+    } catch (error) {
+      toast({
+        title: 'Trade Failed',
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive',
+      });
     } finally {
-      setIsPlacingOrder(false);
-    }
-  };
-
-  const cancelOrder = (orderId: string) => {
-    setOrders(prev => prev.map(order => 
-      order.id === orderId 
-        ? { ...order, status: 'cancelled' }
-        : order
-    ));
-  };
-
-  const formatCurrency = (value: number) => 
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'filled': return 'text-green-400';
-      case 'cancelled': return 'text-red-400';
-      case 'pending': return 'text-yellow-400';
-      default: return 'text-gray-400';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'filled': return <CheckCircle className="w-4 h-4" />;
-      case 'cancelled': return <AlertTriangle className="w-4 h-4" />;
-      case 'pending': return <Clock className="w-4 h-4" />;
-      default: return null;
+      setIsExecuting(false);
     }
   };
 
   return (
-    <div className="container mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-white">Manual Trading</h1>
-        <div className="text-sm text-gray-400">
-          Paper trading mode - No real money at risk
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Manual Trading</h1>
+          <div className="flex items-center mt-2 space-x-2">
+            <div className="px-2 py-1 bg-blue-600 text-white text-xs rounded">
+              REALISTIC SIMULATION
+            </div>
+            <span className="text-sm text-gray-400">
+              Live prices • Slippage • Market impact • Partial fills
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Order Entry */}
-        <div className="xl:col-span-2">
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-6">Place Order</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Symbol & Price */}
-              <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Trading Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Place Order</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Symbol</label>
-                  <select 
-                    value={selectedSymbol} 
-                    onChange={(e) => setSelectedSymbol(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg"
-                  >
-                    <option value="BTCUSDT">BTC/USDT</option>
-                    <option value="ETHUSDT">ETH/USDT</option>
-                    <option value="ADAUSDT">ADA/USDT</option>
-                    <option value="SOLUSDT">SOL/USDT</option>
-                  </select>
+                  <Label htmlFor="symbol">Symbol</Label>
+                  <Select value={symbol} onValueChange={setSymbol}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BTCUSDT">BTC/USDT</SelectItem>
+                      <SelectItem value="ETHUSDT">ETH/USDT</SelectItem>
+                      <SelectItem value="ADAUSDT">ADA/USDT</SelectItem>
+                      <SelectItem value="SOLUSDT">SOL/USDT</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Current Price</label>
-                  <div className="bg-gray-700 border border-gray-600 px-3 py-2 rounded-lg">
-                    <span className="text-white font-mono">{formatCurrency(currentPrice)}</span>
-                  </div>
+                  <Label htmlFor="side">Side</Label>
+                  <Select value={side} onValueChange={(value) => setSide(value as 'buy' | 'sell')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="buy">Buy</SelectItem>
+                      <SelectItem value="sell">Sell</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="type">Order Type</Label>
+                  <Select value={type} onValueChange={(value) => setType(value as 'market' | 'limit')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="market">Market</SelectItem>
+                      <SelectItem value="limit">Limit</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Order Type</label>
-                  <div className="flex space-x-2">
-                    {(['market', 'limit', 'stop'] as const).map((type) => (
-                      <button
-                        key={type}
-                        onClick={() => setOrderType(type)}
-                        className={`px-4 py-2 rounded-lg capitalize ${
-                          orderType === type 
-                            ? 'bg-blue-600 text-white' 
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    ))}
+                  <Label htmlFor="amount">Amount</Label>
+                  <div className="space-y-2">
+                    <Input
+                      id="amount"
+                      type="number"
+                      step="0.00001"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0.00"
+                      required
+                    />
+                    {(() => {
+                      if (side === 'sell') {
+                        const baseCurrency = symbol.replace('USDT', '');
+                        const availableAmount = balance[baseCurrency] || 0;
+                        return availableAmount > 0 ? (
+                          <div className="flex gap-1 flex-wrap">
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+                              onClick={() => setAmount((availableAmount * 0.25).toFixed(6))}
+                            >
+                              25%
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+                              onClick={() => setAmount((availableAmount * 0.5).toFixed(6))}
+                            >
+                              50%
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+                              onClick={() => setAmount((availableAmount * 0.75).toFixed(6))}
+                            >
+                              75%
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition-colors font-medium"
+                              onClick={() => setAmount(availableAmount.toFixed(6))}
+                            >
+                              MAX
+                            </button>
+                            <div className="text-xs text-gray-500 mt-1 w-full">
+                              Available: {availableAmount.toFixed(6)} {baseCurrency}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-red-500">
+                            No {symbol.replace('USDT', '')} available
+                          </div>
+                        );
+                      } else {
+                        // For buy orders, show USDT-based amounts
+                        const availableUSDT = balance.USDT || 0;
+                        const currentPrice = marketPrices[symbol] || 0;
+                        if (availableUSDT > 0 && currentPrice > 0) {
+                          const maxAmount = availableUSDT / currentPrice;
+                          return (
+                            <div className="flex gap-1 flex-wrap">
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+                                onClick={() => setAmount((maxAmount * 0.25).toFixed(6))}
+                              >
+                                25%
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+                                onClick={() => setAmount((maxAmount * 0.5).toFixed(6))}
+                              >
+                                50%
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors"
+                                onClick={() => setAmount((maxAmount * 0.75).toFixed(6))}
+                              >
+                                75%
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors font-medium"
+                                onClick={() => setAmount((maxAmount * 0.95).toFixed(6))} // 95% to account for fees
+                              >
+                                MAX
+                              </button>
+                              <div className="text-xs text-gray-500 mt-1 w-full">
+                                Max buyable: {(maxAmount * 0.95).toFixed(6)} {symbol.replace('USDT', '')} 
+                                <span className="ml-2">(${availableUSDT.toFixed(2)} USDT)</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="text-xs text-red-500">
+                            Insufficient USDT balance
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
               </div>
 
-              {/* Order Details */}
-              <div className="space-y-4">
+              {type === 'limit' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Side</label>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setOrderSide('buy')}
-                      className={`flex-1 py-2 rounded-lg flex items-center justify-center space-x-2 ${
-                        orderSide === 'buy' 
-                          ? 'bg-green-600 text-white' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      <TrendingUp className="w-4 h-4" />
-                      <span>Buy</span>
-                    </button>
-                    <button
-                      onClick={() => setOrderSide('sell')}
-                      className={`flex-1 py-2 rounded-lg flex items-center justify-center space-x-2 ${
-                        orderSide === 'sell' 
-                          ? 'bg-red-600 text-white' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      }`}
-                    >
-                      <TrendingDown className="w-4 h-4" />
-                      <span>Sell</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Quantity</label>
-                  <input
+                  <Label htmlFor="price">Price</Label>
+                  <Input
+                    id="price"
                     type="number"
-                    step="0.000001"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg"
-                    placeholder="0.001"
+                    step="0.01"
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    placeholder="0.00"
+                    required
                   />
                 </div>
-
-                {orderType !== 'market' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg"
-                      placeholder="Enter price"
-                    />
-                  </div>
-                )}
-
-                {orderType === 'stop' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Stop Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={stopPrice}
-                      onChange={(e) => setStopPrice(e.target.value)}
-                      className="w-full bg-gray-700 border border-gray-600 text-white px-3 py-2 rounded-lg"
-                      placeholder="Enter stop price"
-                    />
-                  </div>
-                )}
-
-                <div className="pt-2">
-                  <div className="text-sm text-gray-400 mb-2">
-                    Order Value: {formatCurrency(calculateOrderValue())}
-                  </div>
-                  <button
-                    onClick={placeOrder}
-                    disabled={isPlacingOrder}
-                    className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-                      orderSide === 'buy'
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-red-600 hover:bg-red-700 text-white'
-                    } disabled:opacity-50`}
-                  >
-                    {isPlacingOrder ? 'Placing Order...' : `${orderSide.toUpperCase()} ${selectedSymbol}`}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {error && (
-              <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                <div className="flex items-center space-x-2 text-red-400">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm">{error}</span>
-                </div>
-              </div>
-            )}
-
-            {success && (
-              <div className="mt-4 bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-                <div className="flex items-center space-x-2 text-green-400">
-                  <CheckCircle className="w-4 h-4" />
-                  <span className="text-sm">{success}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Account Balance */}
-        <div className="space-y-6">
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-4">Account Balance</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-400">USDT:</span>
-                <span className="text-white font-mono">{balance.USDT.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">BTC:</span>
-                <span className="text-white font-mono">{balance.BTC.toFixed(6)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">ETH:</span>
-                <span className="text-white font-mono">{balance.ETH.toFixed(6)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <h3 className="text-lg font-semibold text-white mb-4">Market Info</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Symbol:</span>
-                <span className="text-white">{selectedSymbol}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Price:</span>
-                <span className="text-white font-mono">{formatCurrency(currentPrice)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Mode:</span>
-                <span className="text-yellow-400">Paper Trading</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Orders History */}
-      <div className="mt-8 bg-gray-800 rounded-lg border border-gray-700">
-        <div className="p-6 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">Recent Orders</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Time</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Symbol</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Side</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Quantity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Price</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-700">
-              {orders.map((order) => (
-                        <tr key={order.id} className="hover:bg-gray-700/50">
-                          <td className="px-6 py-4 text-sm text-gray-300">
-                            {new Date(order.timestamp).toLocaleTimeString()}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-white">{order.symbol}</td>
-                          <td className="px-6 py-4 text-sm">
-                            <span className={`capitalize ${order.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
-                              {order.side}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-300 capitalize">{order.type}</td>
-                          <td className="px-6 py-4 text-sm text-white font-mono">{order.quantity.toFixed(6)}</td>
-                          <td className="px-6 py-4 text-sm text-white font-mono">
-                            <div>
-                              <div>Entry: {formatCurrency(order.fillPrice || order.price)}</div>
-                              {order.currentPrice && order.status === 'filled' && (
-                                <div className="text-xs text-gray-400">
-                                  Current: {formatCurrency(order.currentPrice)}
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm">
-                            <div className={`flex items-center space-x-1 ${getStatusColor(order.status)}`}>
-                              {getStatusIcon(order.status)}
-                              <span className="capitalize">{order.status}</span>
-                            </div>
-                            {order.pnl !== undefined && order.status === 'filled' && (
-                              <div className={`text-xs font-mono ${order.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {order.pnl >= 0 ? '+' : ''}{formatCurrency(order.pnl)}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm">
-                            {order.status === 'pending' && (
-                              <button
-                                onClick={() => cancelOrder(order.id)}
-                                className="text-red-400 hover:text-red-300 text-xs"
-                              >
-                                Cancel
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-              {orders.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-6 py-8 text-center text-gray-400">
-                    No orders placed yet
-                  </td>
-                </tr>
               )}
-            </tbody>
-          </table>
+
+              <Button
+                type="submit"
+                className={`w-full ${side === 'buy' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                disabled={isExecuting || !marketPrices[symbol]}
+              >
+                {isExecuting ? 'Processing...' : `${side.toUpperCase()} ${symbol}`}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Live Market Data and Balance */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Account Balance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center p-2 bg-primary/10 rounded">
+                  <span className="font-medium">USDT</span>
+                  <span className="font-bold">${balance.USDT.toFixed(2)}</span>
+                </div>
+                {Object.entries(balance).filter(([key, value]) => key !== 'USDT' && value > 0).map(([currency, amount]) => {
+                  const symbol = `${currency}USDT`;
+                  const currentPrice = marketPrices[symbol] || 0;
+                  const usdValue = amount * currentPrice;
+                  return (
+                    <div key={currency} className="flex justify-between items-center p-2 bg-muted rounded">
+                      <div>
+                        <span className="font-medium">{currency}</span>
+                        <div className="text-xs text-gray-500">
+                          ${currentPrice > 0 ? usdValue.toFixed(2) : '0.00'} USD
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-bold">{amount.toFixed(6)}</span>
+                        {currentPrice > 0 && (
+                          <div className="text-xs text-gray-500">
+                            @${currentPrice.toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="border-t pt-2 mt-3">
+                  <div className="flex justify-between items-center p-2 bg-green-100 rounded">
+                    <span className="font-medium text-green-800">Total Portfolio Value</span>
+                    <span className="font-bold text-green-800">
+                      ${(balance.USDT + Object.entries(balance)
+                        .filter(([key]) => key !== 'USDT')
+                        .reduce((total, [currency, amount]) => {
+                          const symbol = `${currency}USDT`;
+                          const price = marketPrices[symbol] || 0;
+                          return total + (amount * price);
+                        }, 0)).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Live Prices</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT'].map((pair) => {
+                  const currentPrice = marketPrices[pair];
+                  const priceDisplay = currentPrice ? `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Loading...';
+
+                  return (
+                    <div key={pair} className="flex justify-between items-center p-3 bg-muted rounded">
+                      <span className="font-medium">{pair.replace('USDT', '/USDT')}</span>
+                      <div className="text-right">
+                        <div className="font-bold">{priceDisplay}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {currentPrice ? 'Live' : 'Connecting...'}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      {/* Comprehensive Trade History */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Trade History - Exchange View</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-2">Order #</th>
+                  <th className="text-left p-2">Symbol</th>
+                  <th className="text-left p-2">Side</th>
+                  <th className="text-left p-2">Amount</th>
+                  <th className="text-left p-2">Buy Price</th>
+                  <th className="text-left p-2">Sell Price</th>
+                  <th className="text-left p-2">Total Value</th>
+                  <th className="text-left p-2">Fees</th>
+                  <th className="text-left p-2">Net Value</th>
+                  <th className="text-left p-2">PnL</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-left p-2">Time</th>
+                  <th className="text-left p-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trades.length > 0 ? (
+                  trades.slice(0, 20).map((trade) => (
+                    <tr key={trade.id} className="border-b hover:bg-muted/50">
+                      <td className="p-2">
+                        <div className="font-mono text-xs">#{trade.orderNumber || 'N/A'}</div>
+                        <div className="text-xs text-gray-500">{trade.exchange || 'Manual Sim'}</div>
+                      </td>
+                      <td className="p-2">
+                        <div className="font-medium">{trade.symbol.replace('USDT', '/USDT')}</div>
+                        {trade.slippage && (
+                          <div className="text-xs text-gray-500">
+                            Slippage: {(trade.slippage * 100).toFixed(3)}%
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        <span className={trade.side === 'buy' ? 'text-green-600' : 'text-red-600'}>
+                          {trade.side.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-2">
+                        <div className="font-mono">{trade.quantity.toFixed(6)}</div>
+                      </td>
+                      <td className="p-2">
+                        <div className="font-mono">
+                          {trade.buyPrice ? `$${trade.buyPrice.toFixed(2)}` : 
+                           trade.side === 'buy' ? `$${(trade.fillPrice || trade.price).toFixed(2)}` : '-'}
+                        </div>
+                        {trade.avgBuyPrice && trade.side === 'buy' && (
+                          <div className="text-xs text-gray-500">Avg: ${trade.avgBuyPrice.toFixed(2)}</div>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        <div className="font-mono">
+                          {trade.sellPrice ? `$${trade.sellPrice.toFixed(2)}` : 
+                           trade.side === 'sell' ? `$${(trade.fillPrice || trade.price).toFixed(2)}` : '-'}
+                        </div>
+                        {trade.avgSellPrice && trade.side === 'sell' && (
+                          <div className="text-xs text-gray-500">Avg: ${trade.avgSellPrice.toFixed(2)}</div>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        <div className="font-mono">${(trade.totalValue || 0).toFixed(2)}</div>
+                      </td>
+                      <td className="p-2">
+                        <div className="font-mono text-red-500">${(trade.fees || 0).toFixed(2)}</div>
+                        <div className="text-xs text-gray-500">
+                          {trade.commission ? `${(trade.commission * 100).toFixed(3)}%` : '0.1%'}
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <div className="font-mono">${(trade.netValue || 0).toFixed(2)}</div>
+                      </td>
+                      <td className="p-2">
+                        <div className={`font-mono ${(trade.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          ${(trade.pnl || 0).toFixed(2)}
+                        </div>
+                        {trade.status === 'closed' && <div className="text-xs text-blue-500">(Final)</div>}
+                        {trade.tradePairId && (
+                          <div className="text-xs text-gray-500">
+                            Pair: #{trade.tradePairId.slice(-6)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        <span className={
+                          trade.status === 'filled' ? 'text-green-600' : 
+                          trade.status === 'closed' ? 'text-blue-600' :
+                          trade.status === 'cancelled' ? 'text-red-600' : 
+                          'text-yellow-600'
+                        }>
+                          {trade.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="p-2">
+                        <div className="text-xs">{new Date(trade.timestamp).toLocaleDateString()}</div>
+                        <div className="text-xs text-gray-500">{new Date(trade.timestamp).toLocaleTimeString()}</div>
+                        {trade.executionTime && (
+                          <div className="text-xs text-gray-400">
+                            Exec: {trade.executionTime - trade.timestamp}ms
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        {trade.status === 'pending' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCancelOrder(trade.id)}
+                            className="text-xs"
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={13} className="text-center p-4 text-muted-foreground">
+                      No trades yet. Place your first order above.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Trade Summary Stats */}
+          {trades.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted rounded">
+              <div className="text-center">
+                <div className="text-sm text-gray-500">Total Trades</div>
+                <div className="font-bold">{trades.length}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-500">Total Fees Paid</div>
+                <div className="font-bold text-red-600">
+                  ${trades.reduce((sum, trade) => sum + (trade.fees || 0), 0).toFixed(2)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-500">Closed Trades</div>
+                <div className="font-bold text-blue-600">
+                  {trades.filter(t => t.status === 'closed').length}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-500">Realized PnL</div>
+                <div className={`font-bold ${trades.filter(t => t.status === 'closed').reduce((sum, trade) => sum + (trade.pnl || 0), 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ${trades.filter(t => t.status === 'closed').reduce((sum, trade) => sum + (trade.pnl || 0), 0).toFixed(2)}
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

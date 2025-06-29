@@ -1,6 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import settingsRoutes from "./settingsRoutes";
+import liveSimulationRoutes from "./liveSimulationRoutes";
+import manualTradingRoutes from "./manualTradingRoutes";
 
 const app = express();
 app.use(express.json());
@@ -39,6 +42,10 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
+  app.use("/api/settings", settingsRoutes);
+  app.use("/api/live-simulation", liveSimulationRoutes);
+  app.use("/api/manual-trading", manualTradingRoutes);
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -68,3 +75,4 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
   });
 })();
+```The code integrates manual trading routes and updates server setup.

@@ -8,15 +8,11 @@ import {
 import { StrategyRunner } from "../trading/StrategyRunner";
 import { CandleData } from "../types/trading";
 import {
-  Play,
-  Pause,
-  Square,
   Upload,
   Download,
   BarChart3,
   TrendingUp,
   TrendingDown,
-  Clock,
   Target,
   AlertTriangle,
   CheckCircle,
@@ -64,87 +60,30 @@ export function BacktestDashboard({
   });
   const chartContainerRef = useRef<HTMLDivElement>(null);
 
-  // Initialize backtester when config changes
-  useEffect(() => {
-    if (config.startDate && config.endDate && config.initialBalance) {
-      const strategy = getStrategyByName(selectedStrategy);
-
-      const backtestConfig: BacktestConfig = {
-        startDate: config.startDate,
-        endDate: config.endDate,
-        initialBalance: config.initialBalance,
-        strategy: strategy,
-        riskConfig: {
-          maxRiskPerTrade: 0.02,
-          maxDailyDrawdown: 0.05,
-          maxOpenPositions: 5,
-          maxCorrelatedPositions: 2,
-          minRiskRewardRatio: 2,
-          maxLeverage: 3,
-          emergencyStopLoss: 0.1,
-          cooldownPeriod: 60,
-        },
-        executorConfig: {
-          paperTrading: true,
-          exchange: "binance",
-          testnet: true,
-          defaultOrderType: "market",
-          slippageTolerance: 0.1,
-          maxOrderSize: 1000,
-          enableStopLoss: true,
-          enableTakeProfit: true,
-        },
-        replaySpeed: config.replaySpeed || 100,
-        commission: config.commission || 0.001,
-        slippage: config.slippage || 0.001,
-        symbol: config.symbol || "BTC/USDT",
-        timeframe: config.timeframe || "15m",
-        epochs: config.epochs || 100,
-      };
-
-      const newBacktester = new Backtester(backtestConfig);
-      setBacktester(newBacktester);
-
-      // Subscribe to progress updates
-      newBacktester.getProgressUpdates().subscribe(setProgress);
-
-      return () => {
-        newBacktester.dispose();
-      };
-    }
-  }, [config, selectedStrategy]);
-
-  // Prepare chart data
-  const chartData = useMemo(() => {
-    if (!results?.trades) return [];
-
-    let equity = 10000;
-    return results.trades.map((trade, index) => {
-      equity += trade.pnl || 0;
-      return {
-        trade: index + 1,
-        equity: equity,
-        pnl: trade.pnl || 0,
-        date: new Date(trade.exitTime).toLocaleDateString(),
-      };
-    });
-  }, [results]);
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const csv = e.target?.result as string;
-        setCsvData(csv);
-        setSampleDataGenerated(false); // Reset sample data flag when CSV is loaded
-        setSampleData([]);
-      };
-      reader.readAsText(file);
+  const getStrategyByName = (name: string) => {
+    switch (name) {
+      case "trend_following":
+        return StrategyRunner.createTrendFollowingStrategy();
+      case "default":
+      default:
+        return StrategyRunner.createDefaultStrategy();
     }
   };
 
-  const generateSampleData = () => {
+  const getTimeframeInMs = (timeframe: string): number => {
+    const timeframeMap: { [key: string]: number } = {
+      "1m": 60 * 1000,
+      "5m": 5 * 60 * 1000,
+      "15m": 15 * 60 * 1000,
+      "30m": 30 * 60 * 1000,
+      "1h": 60 * 60 * 1000,
+      "4h": 4 * 60 * 60 * 1000,
+      "1d": 24 * 60 * 60 * 1000,
+    };
+    return timeframeMap[timeframe] || 15 * 60 * 1000; // Default to 15 minutes
+  };
+
+  const generateSampleData = (): CandleData[] => {
     const data: CandleData[] = [];
     const startTime =
       config.startDate?.getTime() || Date.now() - 1000 * 60 * 60 * 24 * 30; // 30 days ago
@@ -193,24 +132,14 @@ export function BacktestDashboard({
     console.log(
       `Generated ${data.length} sample candles from ${new Date(startTime)} to ${new Date(endTime)}`,
     );
+    return data;
   };
 
-  const getTimeframeInMs = (timeframe: string): number => {
-    const timeframeMap: { [key: string]: number } = {
-      "1m": 60 * 1000,
-      "5m": 5 * 60 * 1000,
-      "15m": 15 * 60 * 1000,
-      "30m": 30 * 60 * 1000,
-      "1h": 60 * 60 * 1000,
-      "4h": 4 * 60 * 60 * 1000,
-      "1d": 24 * 60 * 60 * 1000,
-    };
-    return timeframeMap[timeframe] || 15 * 60 * 1000;
-  };
-
-  const startBacktest = async () => {
-    if (!backtester) {
-      setError("Backtester not initialized");
+  const runBacktestWithInstance = async (backtesterInstance: Backtester) => {
+    console.log("Running backtest with instance:", backtesterInstance);
+    if (!backtesterInstance) {
+      console.error("Backtester instance is null or undefined");
+      setError("Backtester not initialized - please wait for initialization to complete");
       return;
     }
 
@@ -221,18 +150,27 @@ export function BacktestDashboard({
       setError(null);
 
       // Load data into backtester
+      let dataToUse: CandleData[];
       if (csvData) {
-        backtester.loadData(csvData);
+        // Parse CSV data (implement parseCsvData if needed)
+        dataToUse = [];
       } else if (sampleDataGenerated && sampleData.length > 0) {
-        backtester.loadData(sampleData);
+        // Use generated sample data
+        dataToUse = sampleData;
       } else {
         // Generate sample data if none exists
-        const data = generateSampleData();
-        backtester.loadData(data);
+        dataToUse = generateSampleData();
       }
 
+      if (dataToUse.length === 0) {
+        throw new Error("No data available for backtesting");
+      }
+
+      // Load data into backtester
+      backtesterInstance.loadData(dataToUse);
+
       // Run backtest
-      const result = await backtester.startBacktest();
+      const result = await backtesterInstance.startBacktest();
 
       setResults(result);
 
@@ -250,24 +188,106 @@ export function BacktestDashboard({
     }
   };
 
-  const pauseBacktest = () => {
-    if (backtester) {
-      if (isPaused) {
-        backtester.resume();
-        setIsPaused(false);
-      } else {
-        backtester.pause();
-        setIsPaused(true);
-      }
-    }
-  };
+  // Initialize backtester when config changes
+  useEffect(() => {
+    const initializeBacktester = async () => {
+      try {
+        if (config.startDate && config.endDate && config.initialBalance) {
+          const strategy = getStrategyByName(selectedStrategy);
 
-  const stopBacktest = () => {
-    if (backtester) {
-      backtester.stop();
-      setIsRunning(false);
-      setIsPaused(false);
-      setProgress(null);
+          const backtestConfig: BacktestConfig = {
+            startDate: config.startDate,
+            endDate: config.endDate,
+            initialBalance: config.initialBalance,
+            strategy: strategy,
+            riskConfig: {
+              maxRiskPerTrade: 0.02,
+              maxDrawdown: 0.05,
+              maxPositions: 5,
+              maxLeverage: 3,
+              emergencyStopLoss: 0.1,
+              dailyLossLimit: 0.1,
+              correlationLimit: 0.8,
+            },
+            executorConfig: {
+              paperTrading: true,
+              exchange: "binance",
+              testnet: true,
+              defaultOrderType: "market",
+              slippageTolerance: 0.1,
+              maxOrderSize: 1000,
+              enableStopLoss: true,
+              enableTakeProfit: true,
+              enablePartialFills: true,
+              orderTimeout: 30000,
+              retryAttempts: 3,
+              retryDelay: 1000,
+            },
+            replaySpeed: config.replaySpeed || 100,
+            commission: config.commission || 0.001,
+            slippage: config.slippage || 0.001,
+            symbol: config.symbol || "BTC/USDT",
+            timeframe: config.timeframe || "15m",
+            epochs: config.epochs || 100,
+          };
+
+          console.log("Initializing Backtester with config:", backtestConfig);
+          const newBacktester = new Backtester(backtestConfig);
+          
+          // Set the backtester in state
+          setBacktester(newBacktester);
+          setError(null);
+
+          // Subscribe to progress updates
+          newBacktester.getProgressUpdates().subscribe(setProgress);
+
+          // Automatically run backtest when strategy or config changes
+          setTimeout(async () => {
+            await runBacktestWithInstance(newBacktester);
+          }, 1000);
+        }
+      } catch (error) {
+        console.error("Failed to initialize Backtester:", error);
+        setError(`Failed to initialize backtester: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+
+    initializeBacktester();
+
+    return () => {
+      if (backtester) {
+        backtester.dispose();
+      }
+    };
+  }, [config, selectedStrategy]);
+
+  // Prepare chart data
+  const chartData = useMemo(() => {
+    if (!results?.trades) return [];
+
+    let equity = 10000;
+    return results.trades.map((trade: any, index: number) => {
+      equity += trade.pnl || 0;
+      return {
+        trade: index + 1,
+        equity: equity,
+        pnl: trade.pnl || 0,
+        date: new Date(trade.exitTime).toLocaleDateString(),
+      };
+    });
+  }, [results]);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const csv = e.target?.result as string;
+        setCsvData(csv);
+        setSampleDataGenerated(false);
+        setSampleData([]);
+      };
+      reader.readAsText(file);
     }
   };
 
@@ -275,22 +295,18 @@ export function BacktestDashboard({
     if (!results) return;
 
     const csvContent = [
-      "Trade ID,Symbol,Side,Entry Time,Exit Time,Entry Price,Exit Price,Quantity,PnL,PnL %,Commission,Duration (ms)",
-      ...results.trades.map((trade) =>
+      "Trade,Entry Time,Exit Time,Entry Price,Exit Price,Quantity,PnL,Type",
+      ...results.trades.map((trade: any) =>
         [
           trade.id,
-          trade.symbol,
-          trade.side,
           new Date(trade.entryTime).toISOString(),
-          trade.exitTime ? new Date(trade.exitTime).toISOString() : "",
+          new Date(trade.exitTime).toISOString(),
           trade.entryPrice,
-          trade.exitPrice || "",
+          trade.exitPrice,
           trade.quantity,
-          trade.pnl || "",
-          trade.pnlPercent || "",
-          trade.commission,
-          trade.duration || "",
-        ].join(","),
+          trade.pnl,
+          trade.type,
+        ].join(",")
       ),
     ].join("\n");
 
@@ -298,719 +314,249 @@ export function BacktestDashboard({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `backtest_results_${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `backtest_results_${new Date().toISOString()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  };
-
-  const formatPercent = (value: number) => {
-    return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
-  };
-
-  // Get strategy by name
-  const getStrategyByName = (name: string) => {
-    switch (name) {
-      case "trend_following":
-        return StrategyRunner.createTrendFollowingStrategy();
-      case "default":
-      default:
-        return StrategyRunner.createDefaultStrategy();
-    }
-  };
-
-  const runBacktest = async () => {
-    if (!backtester) {
-      setError("Backtester not initialized");
-      return;
-    }
-
-    setIsRunning(true);
-    setIsPaused(false);
-    setResults(null);
-    setError(null);
-
-    try {
-      let dataToUse: CandleData[] = [];
-
-      if (csvData) {
-        // Use uploaded CSV data
-        dataToUse = parseCsvData(csvData);
-      } else if (sampleDataGenerated && sampleData.length > 0) {
-        // Use generated sample data
-        dataToUse = sampleData;
-      } else {
-        // Generate sample data if none exists
-        generateSampleData();
-        // Wait for sample data to be set
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        dataToUse = sampleData;
-      }
-
-      if (dataToUse.length === 0) {
-        throw new Error("No data available for backtesting");
-      }
-
-      console.log(`Loading ${dataToUse.length} candles for backtesting`);
-
-      // Load data into backtester
-      backtester.loadData(dataToUse);
-
-      // Initialize indicators for the strategy
-      const strategyRunner = (backtester as any).strategyRunner;
-      if (strategyRunner && strategyRunner.initializeIndicators) {
-        strategyRunner.initializeIndicators(dataToUse);
-      }
-
-      console.log("Starting backtest...");
-
-      // Run backtest
-      const results = await backtester.startBacktest();
-      setResults(results);
-
-      if (onResultsGenerated) {
-        onResultsGenerated(results);
-      }
-
-      console.log("Backtest completed successfully:", {
-        totalTrades: results.totalTrades,
-        totalReturn: results.totalReturn,
-        winRate: results.winRate,
-      });
-    } catch (error: any) {
-      console.error("Backtest failed:", error);
-      setError(error.message || "Backtest failed");
-    } finally {
-      setIsRunning(false);
-      setIsPaused(false);
-    }
-  };
-
-  // Dummy function to simulate CSV parsing
-  const parseCsvData = (csvData: string): CandleData[] => {
-    // Implement actual CSV parsing logic here
-    // This is a placeholder
-    console.log("Parsing CSV data (placeholder)");
-    return [];
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Configuration Panel */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <h2 className="text-xl font-bold text-white mb-4">
-          Backtest Configuration
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">Symbol</label>
-            <select
-              value={config.symbol || "BTC/USDT"}
-              onChange={(e) =>
-                setConfig((prev) => ({ ...prev, symbol: e.target.value }))
-              }
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            >
-              <option value="BTC/USDT">BTC/USDT</option>
-              <option value="ETH/USDT">ETH/USDT</option>
-              <option value="SOL/USDT">SOL/USDT</option>
-              <option value="ADA/USDT">ADA/USDT</option>
-              <option value="DOT/USDT">DOT/USDT</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">
-              Timeframe
-            </label>
-            <select
-              value={config.timeframe || "15m"}
-              onChange={(e) =>
-                setConfig((prev) => ({ ...prev, timeframe: e.target.value }))
-              }
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            >
-              <option value="1m">1 Minute</option>
-              <option value="5m">5 Minutes</option>
-              <option value="15m">15 Minutes</option>
-              <option value="30m">30 Minutes</option>
-              <option value="1h">1 Hour</option>
-              <option value="4h">4 Hours</option>
-              <option value="1d">1 Day</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">Strategy</label>
-            <select
-              value={selectedStrategy}
-              onChange={(e) => setSelectedStrategy(e.target.value)}
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            >
-              <option value="default">Multi-Indicator Confluence</option>
-              <option value="trend_following">Trend Following</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">
-              Start Date
-            </label>
-            <input
-              type="date"
-              value={config.startDate?.toISOString().split("T")[0] || ""}
-              onChange={(e) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  startDate: new Date(e.target.value),
-                }))
-              }
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">End Date</label>
-            <input
-              type="date"
-              value={config.endDate?.toISOString().split("T")[0] || ""}
-              onChange={(e) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  endDate: new Date(e.target.value),
-                }))
-              }
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">
-              Initial Balance
-            </label>
-            <input
-              type="number"
-              value={config.initialBalance || 10000}
-              onChange={(e) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  initialBalance: parseFloat(e.target.value),
-                }))
-              }
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">
-              Replay Speed
-            </label>
-            <select
-              value={config.replaySpeed || 100}
-              onChange={(e) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  replaySpeed: parseInt(e.target.value),
-                }))
-              }
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            >
-              <option value={1}>1x (Real-time)</option>
-              <option value={10}>10x</option>
-              <option value={50}>50x</option>
-              <option value={100}>100x</option>
-              <option value={1000}>1000x (Max)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">
-              Commission (%)
-            </label>
-            <input
-              type="number"
-              step="0.001"
-              value={config.commission || 0.001}
-              onChange={(e) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  commission: parseFloat(e.target.value),
-                }))
-              }
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-300 mb-1">
-              Slippage (%)
-            </label>
-            <input
-              type="number"
-              step="0.001"
-              value={config.slippage || 0.001}
-              onChange={(e) =>
-                setConfig((prev) => ({
-                  ...prev,
-                  slippage: parseFloat(e.target.value),
-                }))
-              }
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-            />
-          </div>
-        </div>
-
-        {/* Data Upload */}
-        <div className="mb-4">
-          <label className="block text-sm text-gray-300 mb-2">
-            Historical Data (CSV or Generate Sample)
-          </label>
-          <div className="flex items-center space-x-4">
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleFileUpload}
-              className="hidden"
-              id="csv-upload"
-            />
-            <label
-              htmlFor="csv-upload"
-              className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white cursor-pointer transition-colors"
-            >
-              <Upload size={16} className="mr-2" />
-              Upload CSV
-            </label>
-            <button
-              onClick={() => {
-                try {
-                  const data = generateSampleData();
-                  setSampleData(data);
-                } catch (error) {
-                  setError(
-                    `Failed to generate sample data: ${error instanceof Error ? error.message : String(error)}`,
-                  );
-                }
-              }}
-              className="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-white transition-colors"
-            >
-              <BarChart3 size={16} className="mr-2" />
-              Generate Sample Data
-            </button>
-            {csvData && (
-              <span className="text-green-400 text-sm">✓ CSV data loaded</span>
-            )}
-            {sampleDataGenerated && !csvData && (
-              <span className="text-purple-400 text-sm">
-                ✓ Sample data generated ({sampleData.length} candles)
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Control Buttons */}
+    <div className="space-y-6 p-6 bg-gray-900 text-white min-h-screen">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-white">Backtest Dashboard</h2>
+        
+        {/* Status Display */}
         <div className="flex items-center space-x-4">
-          {!isRunning ? (
-            <button
-              onClick={runBacktest}
-              disabled={
-                !backtester || isLoading || (!csvData && !sampleDataGenerated)
-              }
-              className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg text-white transition-colors"
-            >
-              <Play size={16} className="mr-2" />
-              {isLoading ? "Loading..." : "Start Backtest"}
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={pauseBacktest}
-                className="flex items-center px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white transition-colors"
-              >
-                {isPaused ? (
-                  <Play size={16} className="mr-2" />
-                ) : (
-                  <Pause size={16} className="mr-2" />
-                )}
-                {isPaused ? "Resume" : "Pause"}
-              </button>
-              <button
-                onClick={stopBacktest}
-                className="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition-colors"
-              >
-                <Square size={16} className="mr-2" />
-                Stop
-              </button>
-            </>
+          {isRunning && (
+            <div className="flex items-center text-blue-400">
+              <Activity size={16} className="mr-2 animate-pulse" />
+              <span>Running backtest automatically...</span>
+            </div>
           )}
-          {!csvData && !sampleDataGenerated && (
+          {results && !isRunning && (
+            <div className="flex items-center text-green-400">
+              <CheckCircle size={16} className="mr-2" />
+              <span>Backtest completed</span>
+            </div>
+          )}
+          {!csvData && !sampleDataGenerated && !isRunning && (
             <span className="text-yellow-400 text-sm">
-              Please upload CSV data or generate sample data first
+              Generating sample data and running backtest...
             </span>
           )}
         </div>
-
-        {error && (
-          <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400">
-            <AlertTriangle size={16} className="inline-block mr-2" />
-            {error}
-          </div>
-        )}
       </div>
 
-      {/* Progress Display */}
-      {progress && (
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+          <div className="flex items-center space-x-2 text-red-400">
+            <AlertTriangle className="w-5 h-5" />
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Configuration Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">
-              Backtest Progress
-            </h3>
-            <div className="text-sm text-gray-400">
-              {progress.processedCandles} / {progress.totalCandles} candles
+          <h3 className="text-lg font-semibold mb-4">Strategy Configuration</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Strategy</label>
+              <select
+                value={selectedStrategy}
+                onChange={(e) => setSelectedStrategy(e.target.value)}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+              >
+                <option value="default">Multi-Indicator Confluence</option>
+                <option value="trend_following">Trend Following</option>
+              </select>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Initial Balance</label>
+                <input
+                  type="number"
+                  value={config.initialBalance}
+                  onChange={(e) => setConfig({...config, initialBalance: parseFloat(e.target.value)})}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Commission (%)</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={config.commission}
+                  onChange={(e) => setConfig({...config, commission: parseFloat(e.target.value)})}
+                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white"
+                />
+              </div>
             </div>
           </div>
+        </div>
 
-          <div className="mb-4">
-            <div className="flex justify-between text-sm text-gray-400 mb-1">
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4">Data Source</h3>
+          <div className="space-y-4">
+            <label
+              htmlFor="csv-upload"
+              className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-gray-500 transition-colors"
+            >
+              <div className="text-center">
+                <Upload className="mx-auto mb-2 text-gray-400" size={24} />
+                <span className="text-sm text-gray-400">
+                  Upload CSV data or use generated sample data
+                </span>
+              </div>
+              <input
+                id="csv-upload"
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+            
+            <div className="flex space-x-2">
+              <button
+                onClick={() => {
+                  try {
+                    generateSampleData();
+                  } catch (error) {
+                    setError(
+                      `Failed to generate sample data: ${error instanceof Error ? error.message : String(error)}`,
+                    );
+                  }
+                }}
+                className="flex-1 flex items-center justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
+              >
+                <BarChart3 size={16} className="mr-2" />
+                Generate Sample Data
+              </button>
+              
+              {results && (
+                <button
+                  onClick={downloadResults}
+                  className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white transition-colors"
+                >
+                  <Download size={16} className="mr-2" />
+                  Download Results
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Section */}
+      {progress && (
+        <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4">Progress</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
               <span>Progress</span>
               <span>{progress.progress.toFixed(1)}%</span>
             </div>
-            <div className="bg-gray-700 rounded-full h-2">
+            <div className="w-full bg-gray-700 rounded-full h-2">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${progress.progress}%` }}
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gray-700/50 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">Current Date</div>
-              <div className="text-white font-mono text-sm">
-                {progress.currentDate.toLocaleDateString()}
-              </div>
-            </div>
-            <div className="bg-gray-700/50 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">Current Equity</div>
-              <div className="text-white font-mono">
-                {formatCurrency(progress.currentEquity)}
-              </div>
-            </div>
-            <div className="bg-gray-700/50 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">Drawdown</div>
-              <div
-                className={`font-mono ${progress.currentDrawdown < 0 ? "text-red-400" : "text-gray-400"}`}
-              >
-                {formatPercent(progress.currentDrawdown * 100)}
-              </div>
-            </div>
-            <div className="bg-gray-700/50 rounded-lg p-3">
-              <div className="text-gray-400 text-sm">Trades</div>
-              <div className="text-white font-mono">
-                {progress.tradesExecuted}
-              </div>
+            <div className="grid grid-cols-3 gap-4 text-sm text-gray-400 mt-4">
+              <div>Current Equity: ${progress.currentEquity.toFixed(2)}</div>
+              <div>Drawdown: {(progress.currentDrawdown * 100).toFixed(2)}%</div>
+              <div>Trades: {progress.tradesExecuted}</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Results Display */}
+      {/* Results Section */}
       {results && (
         <div className="space-y-6">
-          {/* Summary Stats Row */}
+          {/* Performance Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-sm text-gray-600">Total Return</div>
-                <div
-                  className={`text-2xl font-bold ${results.totalReturnPercent >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  {results.totalReturnPercent.toFixed(2)}%
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Total Return</p>
+                  <p className={`text-xl font-bold ${results.totalReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {(results.totalReturn * 100).toFixed(2)}%
+                  </p>
                 </div>
-                <div className="text-xs text-gray-500">
-                  ${results.totalReturn.toFixed(2)}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-sm text-gray-600">Win Rate</div>
-                <div className="text-2xl font-bold text-blue-600">
-                  {results.winRate.toFixed(1)}%
-                </div>
-                <div className="text-xs text-gray-500">
-                  {results.winningTrades}/{results.totalTrades} trades
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-sm text-gray-600">Max Drawdown</div>
-                <div className="text-2xl font-bold text-red-600">
-                  {results.maxDrawdownPercent.toFixed(2)}%
-                </div>
-                <div className="text-xs text-gray-500">Peak to trough</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="text-sm text-gray-600">Sharpe Ratio</div>
-                <div className="text-2xl font-bold text-purple-600">
-                  {results.sharpeRatio.toFixed(2)}
-                </div>
-                <div className="text-xs text-gray-500">
-                  Risk-adjusted return
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Equity Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Equity Curve</CardTitle>
-              <CardDescription>
-                Portfolio value over time with {results.trades.length} trades
-                executed
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-gray-800 p-6 rounded-lg">
-                <h3 className="text-lg font-semibold mb-4">Equity Curve</h3>
-                <div className="w-full h-96">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="trade" stroke="#d1d5db" />
-                      <YAxis stroke="#d1d5db" />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#1f2937",
-                          border: "1px solid #374151",
-                          borderRadius: "6px",
-                        }}
-                      />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="equity"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        dot={false}
-                        name="Portfolio Value"
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                <TrendingUp className="text-green-400" size={24} />
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Detailed Performance Metrics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Trade Statistics</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span>Total Trades</span>
-                  <span className="font-semibold">{results.totalTrades}</span>
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Max Drawdown</p>
+                  <p className="text-xl font-bold text-red-400">
+                    {(results.maxDrawdown * 100).toFixed(2)}%
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span>Winning Trades</span>
-                  <span className="text-green-600">
-                    {results.winningTrades}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Losing Trades</span>
-                  <span className="text-red-600">{results.losingTrades}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Average Win</span>
-                  <span className="text-green-600">
-                    ${results.averageWin.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Average Loss</span>
-                  <span className="text-red-600">
-                    -${results.averageLoss.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Largest Win</span>
-                  <span className="text-green-600">
-                    ${results.largestWin.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Largest Loss</span>
-                  <span className="text-red-600">
-                    -${Math.abs(results.largestLoss).toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Profit Factor</span>
-                  <span className="font-semibold">
-                    {results.profitFactor.toFixed(2)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+                <TrendingDown className="text-red-400" size={24} />
+              </div>
+            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Risk Metrics</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between">
-                  <span>Sharpe Ratio</span>
-                  <span className="font-semibold">
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Win Rate</p>
+                  <p className="text-xl font-bold text-blue-400">
+                    {(results.winRate * 100).toFixed(1)}%
+                  </p>
+                </div>
+                <Target className="text-blue-400" size={24} />
+              </div>
+            </div>
+
+            <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Sharpe Ratio</p>
+                  <p className="text-xl font-bold text-purple-400">
                     {results.sharpeRatio.toFixed(2)}
-                  </span>
+                  </p>
                 </div>
-                <div className="flex justify-between">
-                  <span>Sortino Ratio</span>
-                  <span className="font-semibold">
-                    {results.sortinoRatio.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Calmar Ratio</span>
-                  <span className="font-semibold">
-                    {results.calmarRatio.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Max Drawdown</span>
-                  <span className="text-red-600">
-                    {results.maxDrawdownPercent.toFixed(2)}%
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Time in Market</span>
-                  <span>{results.timeInMarket.toFixed(1)}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Consecutive Wins</span>
-                  <span className="text-green-600">
-                    {results.consecutiveWins}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Consecutive Losses</span>
-                  <span className="text-red-600">
-                    {results.consecutiveLosses}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
+                <BarChart3 className="text-purple-400" size={24} />
+              </div>
+            </div>
           </div>
 
-          {/* Recent Trades */}
-          {results.trades.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Trades</CardTitle>
-                <CardDescription>Last 10 trades executed</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Symbol</th>
-                        <th className="text-left p-2">Side</th>
-                        <th className="text-left p-2">Entry</th>
-                        <th className="text-left p-2">Exit</th>
-                        <th className="text-left p-2">P&L</th>
-                        <th className="text-left p-2">%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.trades
-                        .slice(-10)
-                        .reverse()
-                        .map((trade, index) => (
-                          <tr key={trade.id} className="border-b">
-                            <td className="p-2">{trade.symbol}</td>
-                            <td className="p-2">
-                              <span
-                                className={`px-2 py-1 rounded text-xs ${
-                                  trade.side === "buy"
-                                    ? "bg-green-100 text-green-800"
-                                    : "bg-red-100 text-red-800"
-                                }`}
-                              >
-                                {trade.side.toUpperCase()}
-                              </span>
-                            </td>
-                            <td className="p-2">
-                              ${trade.entryPrice.toFixed(2)}
-                            </td>
-                            <td className="p-2">
-                              ${trade.exitPrice?.toFixed(2) || "-"}
-                            </td>
-                            <td
-                              className={`p-2 ${(trade.pnl || 0) >= 0 ? "text-green-600" : "text-red-600"}`}
-                            >
-                              ${(trade.pnl || 0).toFixed(2)}
-                            </td>
-                            <td
-                              className={`p-2 ${(trade.pnlPercent || 0) >= 0 ? "text-green-600" : "text-red-600"}`}
-                            >
-                              {(trade.pnlPercent || 0).toFixed(1)}%
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Equity Curve Chart */}
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <h3 className="text-lg font-semibold mb-4">Equity Curve</h3>
+            <div ref={chartContainerRef} className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="trade" stroke="#9CA3AF" />
+                  <YAxis stroke="#9CA3AF" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: '#1F2937', 
+                      border: '1px solid #374151',
+                      borderRadius: '8px'
+                    }}
+                  />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="equity" 
+                    stroke="#3B82F6" 
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
-}
-
-// Dummy Card and CardContent components (replace with your actual components if available)
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm w-full">
-      {children}
-    </div>
-  );
-}
-
-function CardHeader({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-col space-y-1.5 p-6">{children}</div>;
-}
-
-function CardTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="text-2xl font-semibold leading-none tracking-tight">
-      {children}
-    </h3>
-  );
-}
-
-function CardDescription({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>;
-}
-
-function CardContent({ children }: { children: React.ReactNode }) {
-  return <div className="p-6 pt-0">{children}</div>;
 }

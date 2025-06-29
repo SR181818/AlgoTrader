@@ -1,5 +1,6 @@
 import { technicalIndicators, type OHLCV, calculateIndicators } from '../utils/technicalIndicators';
 import { CandleData } from '../types/trading';
+import { Observable, Subject } from 'rxjs';
 
 export interface Signal {
   type: 'BUY' | 'SELL' | 'HOLD';
@@ -20,8 +21,25 @@ export interface StrategySignal {
 
 export interface StrategyConfig {
   name: string;
-  version: string;
-  parameters: Record<string, any>;
+  version?: string;
+  description?: string;
+  minConfidence?: number;
+  maxSignalsPerHour?: number;
+  riskRewardRatio?: number;
+  requiredIndicators?: string[];
+  rules?: StrategyRule[];
+  parameters?: Record<string, any>;
+}
+
+export interface StrategyRule {
+  name: string;
+  description: string;
+  weight: number;
+  evaluate: (signals: any[], candle: CandleData) => {
+    signal: 'buy' | 'sell' | 'neutral';
+    confidence: number;
+    reasoning: string;
+  };
 }
 
 export class StrategyRunner {
@@ -29,10 +47,27 @@ export class StrategyRunner {
   private data: OHLCV[] = [];
   private currentCandle: CandleData | null = null;
   private candleHistory: CandleData[] = [];
+  private indicatorSignals: Map<string, any> = new Map();
+  private signalsSubject = new Subject<StrategySignal>();
+  private performance = {
+    totalTrades: 0,
+    winRate: 0,
+    totalReturn: 0,
+    maxDrawdown: 0,
+    sharpeRatio: 0
+  };
 
-  constructor(config: StrategyConfig) {
-    this.config = config;
-    console.log(`Strategy set: ${config.name} v${config.version}`);
+  constructor(config?: StrategyConfig) {
+    this.config = config || this.createDefaultConfig();
+    console.log(`Strategy set: ${this.config.name} v${this.config.version || '1.0.0'}`);
+  }
+
+  private createDefaultConfig(): StrategyConfig {
+    return {
+      name: 'Default Strategy',
+      version: '1.0.0',
+      parameters: {}
+    };
   }
 
   setData(data: OHLCV[]): void {
@@ -78,20 +113,26 @@ export class StrategyRunner {
     }
   }
 
-  getStrategySignals(): StrategySignal[] {
+  getStrategySignals(): Observable<StrategySignal> {
+    return this.signalsSubject.asObservable();
+  }
+
+  private emitSignal(): void {
     if (!this.currentCandle || this.candleHistory.length < 50) {
-      return [];
+      return;
     }
 
     const signal = this.generateSignalFromCandles(this.candleHistory);
-    return [{
+    const strategySignal: StrategySignal = {
       action: signal.type,
       confidence: signal.strength,
       timestamp: signal.timestamp,
       price: signal.price,
       indicators: signal.indicators,
       reason: this.getSignalReason(signal)
-    }];
+    };
+
+    this.signalsSubject.next(strategySignal);
   }
 
   private getSignalReason(signal: Signal): string {
@@ -105,6 +146,7 @@ export class StrategyRunner {
 
   private generateSignalFromCandles(candles: CandleData[]): Signal {
     const ohlcvData = candles.map(c => ({
+      timestamp: c.timestamp,
       open: c.open,
       high: c.high,
       low: c.low,
@@ -287,6 +329,36 @@ export class StrategyRunner {
 
   getConfig(): StrategyConfig {
     return this.config;
+  }
+
+  dispose(): void {
+    // Clean up any resources if needed
+    this.candleHistory = [];
+    this.currentCandle = null;
+    this.data = [];
+    this.indicatorSignals.clear();
+  }
+
+  setStrategy(config: StrategyConfig): void {
+    this.config = config;
+    console.log(`Strategy updated: ${config.name} v${config.version}`);
+  }
+
+  getCurrentStrategy(): StrategyConfig {
+    return this.config;
+  }
+
+  updateIndicatorSignal(indicatorName: string, result: any): void {
+    this.indicatorSignals.set(indicatorName, result);
+  }
+
+  getPerformance(): typeof this.performance {
+    return this.performance;
+  }
+
+  updateStrategyParameters(parameters: Record<string, any>): void {
+    this.config.parameters = { ...this.config.parameters, ...parameters };
+    console.log('Strategy parameters updated:', parameters);
   }
 
   // Static factory methods for creating strategy configurations

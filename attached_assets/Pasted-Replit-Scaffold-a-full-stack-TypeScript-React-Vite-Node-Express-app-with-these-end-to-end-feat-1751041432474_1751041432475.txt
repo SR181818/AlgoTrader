@@ -1,0 +1,36 @@
+Replit: "Scaffold a full‐stack TypeScript React (Vite) + Node/Express app with these end-to-end features:
+
+1. Authentication & User Profiles  
+ • Implement POST /auth/register and /auth/login with Zod validation, storing users (email/password) in MongoDB/Postgres with bcrypt-hashed passwords.  
+ • Issue JWTs on login; protect all API routes so each user only accesses their own data.
+
+2. Historical Backtest Data  
+ • Remove any marketData.getHistoricalData() calls.  
+ • In the backtest endpoint (e.g. POST /api/backtest), fetch real OHLCV via ccxt.fetchOHLCV(symbol, timeframe, since, limit), normalize into Candle[] and cache it.  
+ • Feed that array into the Backtester and return metrics (Sharpe, max drawdown, total return) plus equity curve.
+
+3. Manual Trade Page  
+ • Build a React “Manual Trade” screen showing live tickers and an order form (symbol, side, amount).  
+ • On submit, call POST /api/trades with the user’s Binance API key/secret (stored in profile) to place real or paper orders via OrderExecutor.  
+ • Track and display each trade’s PnL in a live-updating table.
+
+4. Portfolio View  
+ • In Settings, let users save & validate their Binance API key/secret (call ccxt.fetchBalance).  
+ • Build a React “Portfolio” page that calls GET /api/portfolio to fetch balances, open positions (via ccxt), account equity, and historical PnL for the logged-in user.  
+ • Render balances and PnL history in charts.
+
+5. Strategy Builder Preview & Test  
+ • In the visual strategy builder, add a “Preview” button that POSTs the current config to GET /api/strategy/preview, runs StrategyRunner on a small candle sample, and returns a list of signals (LONG/SHORT/HOLD) to overlay on a chart.  
+ • Add a “Test” button that backtests the strategy against recent history (using the same ccxt-fetch + Backtester logic) and returns performance metrics & equity curve.
+
+6. Blockchain Paywall for AI Features  
+ • Add a free vs paid plan toggle in the UI.  
+ • For unpaid users attempting to access AI features, redirect to a payment page (Stripe checkout or Algorand TEAL contract flow).  
+ • On successful payment webhook, mark the user’s profile as “AI enabled” and reveal a new “AI” tab in the dashboard.
+
+7. Settings Page for Binance API Credentials  
+ • Create a React Settings screen with a secure form to enter/edit Binance API key/secret.  
+ • On save, POST to /api/settings/apikey, validate the credentials with ccxt.fetchBalance, and store encrypted in the database.  
+ • Show clear success/error messages and allow key rotation.
+
+Ensure full TypeScript types, Zod/Joi validation on all endpoints, centralized error handling, and JWT-protected routes. All features must be scoped per user and work seamlessly end-to-end."  
