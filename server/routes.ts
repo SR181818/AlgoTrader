@@ -3,10 +3,13 @@ import { config } from "dotenv";
 config();
 
 import type { Express } from "express";
+import { createServer } from "http";
 import authRoutes from "./authRoutes";
 import tradingRoutes from "./tradingRoutes";
 import settingsRoutes from "./settingsRoutes";
 import liveSimulationRoutes from "./liveSimulationRoutes";
+import liveStrategyRoutes from "./liveStrategyRoutes";
+import manualTradingRoutes from "./manualTradingRoutes";
 
 export function registerRoutes(app: Express) {
   // Authentication routes
@@ -17,6 +20,12 @@ export function registerRoutes(app: Express) {
   
   // Settings routes (protected)
   app.use("/api/settings", settingsRoutes);
+  
+  // Live trading strategy routes
+  app.use("/api/trading", liveStrategyRoutes);
+  
+  // Manual trading routes
+  app.use("/api/manual-trading", manualTradingRoutes);
 
   // Live simulation endpoints
   app.post("/api/live-simulation/account", async (req, res) => {
@@ -105,5 +114,5 @@ export function registerRoutes(app: Express) {
     return res.json({ success: true, marketData });
   });
 
-  return app;
+  return createServer(app);
 }

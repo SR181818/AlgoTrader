@@ -75,4 +75,3 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
   });
 })();
-```The code integrates manual trading routes and updates server setup.

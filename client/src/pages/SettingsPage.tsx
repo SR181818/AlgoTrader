@@ -5,14 +5,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
-import { Key, Shield, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
+import { Key, Shield, CheckCircle, AlertTriangle, Trash2, TestTube, Eye, EyeOff, Activity, DollarSign } from 'lucide-react';
 
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
+  const [testResults, setTestResults] = useState<any>(null);
+  const [selectedExchange, setSelectedExchange] = useState('binance');
+  const [customEndpoint, setCustomEndpoint] = useState('');
+  const [testMode, setTestMode] = useState('credentials');
   const { toast } = useToast();
 
   // Fetch API key status
@@ -48,21 +54,46 @@ export default function SettingsPage() {
     },
   });
 
-  // Test API credentials mutation
+  // Enhanced API testing mutation
   const testCredentialsMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest('POST', '/api/settings/apikey/test');
+    mutationFn: async (testData?: { apiKey?: string; apiSecret?: string; exchange?: string }) => {
+      const response = await apiRequest('POST', '/api/settings/apikey/test', testData);
       return response.json();
     },
     onSuccess: (data) => {
+      setTestResults(data);
       toast({
         title: 'API Test Successful',
-        description: `Connected successfully. Account status: ${data.accountStatus}`,
+        description: `Connected successfully. Balance: $${data.totalBalance?.toFixed(2) || 'N/A'}`,
       });
     },
     onError: (error: any) => {
+      setTestResults({ error: error.message, success: false });
       toast({
         title: 'API Test Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Advanced API testing mutation
+  const advancedTestMutation = useMutation({
+    mutationFn: async (testConfig: any) => {
+      const response = await apiRequest('POST', '/api/settings/apikey/advanced-test', testConfig);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setTestResults(data);
+      toast({
+        title: 'Advanced Test Complete',
+        description: `All tests completed. ${data.passedTests}/${data.totalTests} passed`,
+      });
+    },
+    onError: (error: any) => {
+      setTestResults({ error: error.message, success: false });
+      toast({
+        title: 'Advanced Test Failed',
         description: error.message,
         variant: 'destructive',
       });
@@ -107,16 +138,41 @@ export default function SettingsPage() {
   };
 
   const handleTestCredentials = () => {
-    if (!apiKeyStatus?.hasApiKey) {
+    if (testMode === 'live' && (!apiKey.trim() || !apiSecret.trim())) {
       toast({
-        title: 'No API Credentials',
+        title: 'Missing Credentials',
+        description: 'Please enter API key and secret for live testing',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (testMode === 'saved' && !apiKeyStatus?.hasApiKey) {
+      toast({
+        title: 'No Saved Credentials',
         description: 'Please save your API credentials first',
         variant: 'destructive',
       });
       return;
     }
     
-    testCredentialsMutation.mutate();
+    const testData = testMode === 'live' ? {
+      apiKey: apiKey.trim(),
+      apiSecret: apiSecret.trim(),
+      exchange: selectedExchange
+    } : undefined;
+    
+    testCredentialsMutation.mutate(testData);
+  };
+
+  const handleAdvancedTest = () => {
+    const testConfig = {
+      exchange: selectedExchange,
+      tests: ['connection', 'balance', 'orderHistory', 'symbols', 'permissions'],
+      customEndpoint: customEndpoint || undefined
+    };
+    
+    advancedTestMutation.mutate(testConfig);
   };
 
   const handleDeleteCredentials = () => {
@@ -250,6 +306,216 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Advanced API Testing Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <TestTube className="w-5 h-5" />
+            <span>API Testing & Validation</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Test Mode Selection */}
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Label>Test Mode</Label>
+              <Select value={testMode} onValueChange={setTestMode}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="saved">Test Saved Credentials</SelectItem>
+                  <SelectItem value="live">Test New Credentials</SelectItem>
+                  <SelectItem value="advanced">Advanced Testing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label>Exchange</Label>
+              <Select value={selectedExchange} onValueChange={setSelectedExchange}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="binance">Binance</SelectItem>
+                  <SelectItem value="coinbase">Coinbase Pro</SelectItem>
+                  <SelectItem value="kraken">Kraken</SelectItem>
+                  <SelectItem value="kucoin">KuCoin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-end">
+              <Button 
+                onClick={testMode === 'advanced' ? handleAdvancedTest : handleTestCredentials}
+                disabled={testCredentialsMutation.isPending || advancedTestMutation.isPending}
+                className="w-full"
+              >
+                {testCredentialsMutation.isPending || advancedTestMutation.isPending ? (
+                  <Activity className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <TestTube className="w-4 h-4 mr-2" />
+                )}
+                {testMode === 'advanced' ? 'Run Advanced Tests' : 'Test API'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Live Testing Credentials (only shown in live mode) */}
+          {testMode === 'live' && (
+            <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+              <div>
+                <Label htmlFor="testApiKey">Test API Key</Label>
+                <Input
+                  id="testApiKey"
+                  type="text"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="Enter API key to test"
+                />
+              </div>
+              <div>
+                <Label htmlFor="testApiSecret">Test API Secret</Label>
+                <div className="relative">
+                  <Input
+                    id="testApiSecret"
+                    type={showSecret ? 'text' : 'password'}
+                    value={apiSecret}
+                    onChange={(e) => setApiSecret(e.target.value)}
+                    placeholder="Enter API secret to test"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3"
+                    onClick={() => setShowSecret(!showSecret)}
+                  >
+                    {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Custom Endpoint (advanced mode) */}
+          {testMode === 'advanced' && (
+            <div>
+              <Label htmlFor="customEndpoint">Custom Endpoint (Optional)</Label>
+              <Input
+                id="customEndpoint"
+                type="text"
+                value={customEndpoint}
+                onChange={(e) => setCustomEndpoint(e.target.value)}
+                placeholder="https://api.custom-exchange.com"
+              />
+            </div>
+          )}
+
+          {/* Test Results Display */}
+          {testResults && (
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Activity className="w-5 h-5 text-blue-600" />
+                <h3 className="font-semibold">Test Results</h3>
+              </div>
+              
+              {testResults.success ? (
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <CheckCircle className="w-5 h-5 text-green-600" />
+                    <span className="font-medium text-green-800 dark:text-green-200">Connection Successful</span>
+                  </div>
+                  
+                  {testResults.accountStatus && (
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Account Status:</span>
+                        <span className="ml-2 font-medium">{testResults.accountStatus}</span>
+                      </div>
+                      {testResults.totalBalance !== undefined && (
+                        <div>
+                          <span className="text-muted-foreground">Total Balance:</span>
+                          <span className="ml-2 font-medium">${testResults.totalBalance.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {testResults.passedTests && (
+                    <div className="mt-3">
+                      <span className="text-muted-foreground">Tests Passed:</span>
+                      <span className="ml-2 font-medium">{testResults.passedTests}/{testResults.totalTests}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <span className="font-medium text-red-800 dark:text-red-200">Test Failed</span>
+                  </div>
+                  <p className="text-sm text-red-700 dark:text-red-300">{testResults.error}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Quick Test Actions */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setTestMode('saved');
+                handleTestCredentials();
+              }}
+              disabled={!apiKeyStatus?.hasApiKey || testCredentialsMutation.isPending}
+            >
+              <Shield className="w-4 h-4 mr-2" />
+              Quick Connection Test
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const testConfig = {
+                  exchange: selectedExchange,
+                  tests: ['balance'],
+                };
+                advancedTestMutation.mutate(testConfig);
+              }}
+              disabled={!apiKeyStatus?.hasApiKey || advancedTestMutation.isPending}
+            >
+              <DollarSign className="w-4 h-4 mr-2" />
+              Balance Check
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setTestResults(null)}
+              disabled={!testResults}
+            >
+              Clear Results
+            </Button>
+          </div>
+
+          {/* Testing Tips */}
+          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Testing Tips</h4>
+            <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+              <li>• Use "Test New Credentials" to validate API keys before saving</li>
+              <li>• "Advanced Testing" checks permissions, balance access, and trading capabilities</li>
+              <li>• Ensure your API keys have the required permissions for automated trading</li>
+              <li>• Test with small amounts first when using live trading mode</li>
+            </ul>
           </div>
         </CardContent>
       </Card>

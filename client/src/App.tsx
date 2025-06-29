@@ -16,6 +16,7 @@ import StrategyBuilderPage from './pages/StrategyBuilderPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import LiveSimulationPage from './pages/LiveSimulationPage';
+import LiveTradingPage from './pages/LiveTradingPage';
 
 // Wrap the main App component with error boundary
 const App = () => {
@@ -94,6 +95,7 @@ function AppContent() {
                   <NavLink to="/dashboard" icon={<Activity size={18} />} text="Dashboard" />
                   <NavLink to="/backtest" icon={<Zap size={18} />} text="Backtest" />
                   <NavLink to="/manual-trading" icon={<Globe size={18} />} text="Manual Trade" />
+                  <NavLink to="/live-trading" icon={<Zap size={18} />} text="Live Trading" />
                   <NavLink to="/portfolio" icon={<BarChart3 size={18} />} text="Portfolio" />
                   <NavLink to="/indicators" icon={<Library size={18} />} text="Indicators" />
                   <NavLink to="/strategy-builder" icon={<Bot size={18} />} text="Strategy" />
@@ -173,6 +175,12 @@ function AppContent() {
         <Route path="/live-simulation">
           <ProtectedRoute>
             <LiveSimulationPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/live-trading">
+          <ProtectedRoute>
+            <LiveTradingPage />
           </ProtectedRoute>
         </Route>
 

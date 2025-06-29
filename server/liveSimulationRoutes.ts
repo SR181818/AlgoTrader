@@ -1,16 +1,16 @@
 
-import { Hono } from "hono";
+import { Router } from "express";
 import { db } from "./db";
 import { liveSimulationAccounts, liveSimulationOrders, liveSimulationPositions, marketDataCache } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { BinanceMarketData } from "../client/src/services/BinanceMarketData";
 
-const app = new Hono();
+const router = Router();
 const binanceData = new BinanceMarketData();
 
 // Get or create simulation account
-app.get("/account/:userId", async (c) => {
-  const userId = parseInt(c.req.param("userId"));
+router.get("/account/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId);
   
   let account = await db.select()
     .from(liveSimulationAccounts)
@@ -31,13 +31,12 @@ app.get("/account/:userId", async (c) => {
     account = newAccount;
   }
 
-  return c.json({ account: account[0] });
+  res.json({ account: account[0] });
 });
 
 // Place order
-app.post("/orders", async (c) => {
-  const orderData = await c.req.json();
-  const { accountId, symbol, side, type, quantity, price, stopPrice } = orderData;
+router.post("/orders", async (req, res) => {
+  const { accountId, symbol, side, type, quantity, price, stopPrice } = req.body;
 
   // Get current market price
   let currentPrice = price;
@@ -73,12 +72,12 @@ app.post("/orders", async (c) => {
     await processOrderFill(newOrder[0], currentPrice);
   }
 
-  return c.json({ order: newOrder[0] });
+  res.json({ order: newOrder[0] });
 });
 
 // Get orders
-app.get("/orders/:accountId", async (c) => {
-  const accountId = parseInt(c.req.param("accountId"));
+router.get("/orders/:accountId", async (req, res) => {
+  const accountId = parseInt(req.params.accountId);
   
   const orders = await db.select()
     .from(liveSimulationOrders)
@@ -86,12 +85,12 @@ app.get("/orders/:accountId", async (c) => {
     .orderBy(desc(liveSimulationOrders.createdAt))
     .limit(50);
 
-  return c.json({ orders });
+  res.json({ orders });
 });
 
 // Get positions
-app.get("/positions/:accountId", async (c) => {
-  const accountId = parseInt(c.req.param("accountId"));
+router.get("/positions/:accountId", async (req, res) => {
+  const accountId = parseInt(req.params.accountId);
   
   const positions = await db.select()
     .from(liveSimulationPositions)
@@ -100,16 +99,16 @@ app.get("/positions/:accountId", async (c) => {
       eq(liveSimulationPositions.isOpen, true)
     ));
 
-  return c.json({ positions });
+  res.json({ positions });
 });
 
 // Update market prices (called periodically)
-app.post("/update-prices", async (c) => {
+router.post("/update-prices", async (req, res) => {
   const symbols = ["BTCUSDT", "ETHUSDT", "ADAUSDT", "SOLUSDT", "DOGEUSDT"];
   
   for (const symbol of symbols) {
     try {
-      const ticker = await binanceData.fetchTicker(symbol);
+      const ticker = await binanceData.getTicker(symbol);
       
       // Update cache
       await db.insert(marketDataCache)
@@ -117,18 +116,18 @@ app.post("/update-prices", async (c) => {
           symbol,
           price: ticker.price.toString(),
           volume: ticker.volume.toString(),
-          change24h: ticker.change24h.toString(),
-          high24h: ticker.high24h.toString(),
-          low24h: ticker.low24h.toString(),
+          change24h: ticker.change.toString(),
+          high24h: ticker.price.toString(), // Use price as fallback
+          low24h: ticker.price.toString(), // Use price as fallback
         })
         .onConflictDoUpdate({
           target: marketDataCache.symbol,
           set: {
             price: ticker.price.toString(),
             volume: ticker.volume.toString(),
-            change24h: ticker.change24h.toString(),
-            high24h: ticker.high24h.toString(),
-            low24h: ticker.low24h.toString(),
+            change24h: ticker.change.toString(),
+            high24h: ticker.price.toString(), // Use price as fallback
+            low24h: ticker.price.toString(), // Use price as fallback
             lastUpdate: new Date(),
           },
         });
@@ -141,18 +140,18 @@ app.post("/update-prices", async (c) => {
     }
   }
 
-  return c.json({ success: true });
+  res.json({ success: true });
 });
 
 // Cancel order
-app.delete("/orders/:orderId", async (c) => {
-  const orderId = parseInt(c.req.param("orderId"));
+router.delete("/orders/:orderId", async (req, res) => {
+  const orderId = parseInt(req.params.orderId);
   
   await db.update(liveSimulationOrders)
     .set({ status: "cancelled", updatedAt: new Date() })
     .where(eq(liveSimulationOrders.id, orderId));
 
-  return c.json({ success: true });
+  res.json({ success: true });
 });
 
 async function processOrderFill(order: any, fillPrice: number) {
@@ -280,4 +279,4 @@ async function updatePositionsPnL(symbol: string, currentPrice: number) {
   }
 }
 
-export default app;
+export default router;

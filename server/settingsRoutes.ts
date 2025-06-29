@@ -102,9 +102,80 @@ router.get('/apikey', authenticateToken, async (req: any, res: Response) => {
   }
 });
 
-// Test API credentials
+// Test API credentials (enhanced)
 router.post('/apikey/test', authenticateToken, async (req: any, res: Response) => {
   try {
+    let apiKey, apiSecret, exchange;
+
+    // Check if testing with provided credentials or saved ones
+    if (req.body.apiKey && req.body.apiSecret) {
+      // Testing with provided credentials
+      apiKey = req.body.apiKey;
+      apiSecret = req.body.apiSecret;
+      exchange = req.body.exchange || 'binance';
+    } else {
+      // Testing with saved credentials
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, req.user.userId))
+        .limit(1);
+
+      if (!user.binanceApiKey || !user.binanceApiSecret) {
+        return res.status(400).json({ error: 'No API credentials found' });
+      }
+
+      // Decrypt saved credentials
+      apiKey = decrypt(user.binanceApiKey);
+      apiSecret = decrypt(user.binanceApiSecret);
+      exchange = 'binance';
+    }
+
+    // Initialize exchange
+    let exchangeInstance;
+    switch (exchange) {
+      case 'binance':
+        exchangeInstance = new ccxt.binance({
+          apiKey,
+          secret: apiSecret,
+          sandbox: false,
+          enableRateLimit: true,
+        });
+        break;
+      default:
+        return res.status(400).json({ error: 'Unsupported exchange' });
+    }
+
+    // Perform tests
+    const balance = await exchangeInstance.fetchBalance();
+    const accountInfo = await exchangeInstance.fetchStatus();
+    
+    const totalBalance = Object.values(balance.total).reduce((sum: number, val: any) => sum + (val || 0), 0);
+
+    res.json({
+      success: true,
+      message: 'API credentials are working correctly',
+      accountStatus: accountInfo,
+      totalBalance: totalBalance,
+      exchange: exchange,
+      timestamp: new Date().toISOString(),
+    });
+
+  } catch (error) {
+    console.error('API test error:', error);
+    res.status(400).json({
+      success: false,
+      error: 'API credentials test failed',
+      details: error.message,
+    });
+  }
+});
+
+// Advanced API testing
+router.post('/apikey/advanced-test', authenticateToken, async (req: any, res: Response) => {
+  try {
+    const { exchange = 'binance', tests = [], customEndpoint } = req.body;
+
     const [user] = await db
       .select()
       .from(users)
@@ -119,28 +190,133 @@ router.post('/apikey/test', authenticateToken, async (req: any, res: Response) =
     const apiKey = decrypt(user.binanceApiKey);
     const apiSecret = decrypt(user.binanceApiSecret);
 
-    // Test the credentials
-    const exchange = new ccxt.binance({
+    // Initialize exchange
+    let exchangeInstance;
+    const exchangeConfig: any = {
       apiKey,
       secret: apiSecret,
       sandbox: false,
       enableRateLimit: true,
-    });
+    };
 
-    const balance = await exchange.fetchBalance();
-    const accountInfo = await exchange.fetchStatus();
+    if (customEndpoint) {
+      exchangeConfig.urls = { api: customEndpoint };
+    }
+
+    switch (exchange) {
+      case 'binance':
+        exchangeInstance = new ccxt.binance(exchangeConfig);
+        break;
+      default:
+        return res.status(400).json({ error: 'Unsupported exchange for advanced testing' });
+    }
+
+    const results = [];
+    let passedTests = 0;
+
+    // Run requested tests
+    for (const test of tests) {
+      try {
+        let testResult;
+        
+        switch (test) {
+          case 'connection':
+            await exchangeInstance.fetchStatus();
+            testResult = { name: 'Connection Test', status: 'passed', message: 'Successfully connected to exchange' };
+            passedTests++;
+            break;
+            
+          case 'balance':
+            const balance = await exchangeInstance.fetchBalance();
+            const totalBalance = Object.values(balance.total).reduce((sum: number, val: any) => sum + (val || 0), 0);
+            testResult = { 
+              name: 'Balance Access', 
+              status: 'passed', 
+              message: `Balance retrieved successfully. Total: $${totalBalance.toFixed(2)}`,
+              data: { totalBalance }
+            };
+            passedTests++;
+            break;
+            
+          case 'orderHistory':
+            const orders = await exchangeInstance.fetchOrders();
+            testResult = { 
+              name: 'Order History', 
+              status: 'passed', 
+              message: `Retrieved ${orders.length} historical orders`,
+              data: { orderCount: orders.length }
+            };
+            passedTests++;
+            break;
+            
+          case 'symbols':
+            const markets = await exchangeInstance.fetchMarkets();
+            testResult = { 
+              name: 'Market Data', 
+              status: 'passed', 
+              message: `Access to ${markets.length} trading pairs`,
+              data: { marketCount: markets.length }
+            };
+            passedTests++;
+            break;
+            
+          case 'permissions':
+            // Test various permissions
+            const permissionTests = [];
+            
+            try {
+              await exchangeInstance.fetchBalance();
+              permissionTests.push('Read account balance');
+            } catch (e) {
+              // Permission denied
+            }
+            
+            try {
+              await exchangeInstance.fetchOrders();
+              permissionTests.push('Read order history');
+            } catch (e) {
+              // Permission denied
+            }
+            
+            testResult = { 
+              name: 'API Permissions', 
+              status: 'passed', 
+              message: `Verified permissions: ${permissionTests.join(', ')}`,
+              data: { permissions: permissionTests }
+            };
+            passedTests++;
+            break;
+            
+          default:
+            testResult = { name: test, status: 'skipped', message: 'Unknown test type' };
+        }
+        
+        results.push(testResult);
+        
+      } catch (error) {
+        results.push({
+          name: test,
+          status: 'failed',
+          message: error.message,
+          error: error.message
+        });
+      }
+    }
 
     res.json({
       success: true,
-      message: 'API credentials are working correctly',
-      accountStatus: accountInfo,
-      totalBalance: Object.values(balance.total).reduce((sum: number, val: any) => sum + (val || 0), 0),
+      exchange: exchange,
+      totalTests: tests.length,
+      passedTests: passedTests,
+      results: results,
+      timestamp: new Date().toISOString(),
     });
 
   } catch (error) {
-    console.error('API test error:', error);
-    res.status(400).json({
-      error: 'API credentials test failed',
+    console.error('Advanced API test error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Advanced API test failed',
       details: error.message,
     });
   }

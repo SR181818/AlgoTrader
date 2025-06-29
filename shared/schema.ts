@@ -130,6 +130,29 @@ export const backtests = pgTable("backtests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const strategies = pgTable("strategies", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  type: text("type").notNull(), // 'trend_following' | 'mean_reversion' | 'momentum' | 'custom'
+  symbol: text("symbol").notNull(),
+  timeframe: text("timeframe").notNull(),
+  stopLoss: numeric("stop_loss", { precision: 10, scale: 4 }),
+  takeProfit: numeric("take_profit", { precision: 10, scale: 4 }),
+  riskPercentage: numeric("risk_percentage", { precision: 10, scale: 4 }),
+  maxPositions: integer("max_positions").default(1),
+  entryConditions: text("entry_conditions"), // JSON string
+  exitConditions: text("exit_conditions"), // JSON string
+  isActive: boolean("is_active").default(false),
+  totalTrades: integer("total_trades").default(0),
+  winRate: numeric("win_rate", { precision: 10, scale: 4 }).default("0"),
+  pnl: numeric("pnl", { precision: 18, scale: 8 }).default("0"),
+  maxDrawdown: numeric("max_drawdown", { precision: 10, scale: 4 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -165,3 +188,8 @@ export const insertBacktestSchema = createInsertSchema(backtests);
 export const selectBacktestSchema = createSelectSchema(backtests);
 export type InsertBacktest = z.infer<typeof insertBacktestSchema>;
 export type Backtest = z.infer<typeof selectBacktestSchema>;
+
+export const insertStrategySchema = createInsertSchema(strategies);
+export const selectStrategySchema = createSelectSchema(strategies);
+export type InsertStrategy = z.infer<typeof insertStrategySchema>;
+export type Strategy = z.infer<typeof selectStrategySchema>;
