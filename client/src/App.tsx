@@ -45,13 +45,10 @@ function AppContent() {
       const userSubscription = localStorage.getItem('userSubscription');
       if (userSubscription) {
         setSubscription(JSON.parse(userSubscription));
+      } else {
+        // Set default subscription for authenticated users
+        setSubscription({ tier: 'ai', active: true });
       }
-    } else {
-      // Auto-login for testing purposes
-      localStorage.setItem('userToken', 'demo_user_token');
-      localStorage.setItem('userSubscription', JSON.stringify({ tier: 'ai', active: true }));
-      setIsAuthenticated(true);
-      setSubscription({ tier: 'ai', active: true });
     }
   }, []);
 

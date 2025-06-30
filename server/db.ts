@@ -8,10 +8,10 @@ import * as schema from "@shared/schema";
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Supabase configuration
+// Database configuration - prioritize Replit DATABASE_URL
+const databaseUrl = process.env.DATABASE_URL;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-const databaseUrl = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
 
 if (!databaseUrl) {
   console.warn('SUPABASE_DB_URL or DATABASE_URL not set. Please add a PostgreSQL database in Replit Secrets.');

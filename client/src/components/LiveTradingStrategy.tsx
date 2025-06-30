@@ -73,6 +73,266 @@ export default function LiveTradingStrategy() {
   // Define predefined template strategies
   const predefinedStrategies = [
     {
+      id: 'rsi_oversold_overbought',
+      name: 'RSI Oversold/Overbought Strategy',
+      description: 'Classic mean reversion strategy using RSI indicator to identify oversold and overbought conditions',
+      type: 'mean_reversion',
+      parameters: {
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        stopLoss: 2.0,
+        takeProfit: 3.0,
+        riskPercentage: 1.0,
+        maxPositions: 3,
+      },
+      conditions: {
+        entry: ['RSI < 30', 'Volume > SMA_20_Volume'],
+        exit: ['RSI > 70', 'Profit >= 2%']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'ema_crossover_trend',
+      name: 'EMA Crossover Trend Following',
+      description: 'Trend following strategy using exponential moving average crossovers to catch momentum',
+      type: 'trend_following',
+      parameters: {
+        symbol: 'ETHUSDT',
+        timeframe: '4h',
+        stopLoss: 1.5,
+        takeProfit: 4.0,
+        riskPercentage: 1.5,
+        maxPositions: 2,
+      },
+      conditions: {
+        entry: ['EMA_12 > EMA_26', 'Price > EMA_50', 'MACD > Signal'],
+        exit: ['EMA_12 < EMA_26', 'RSI > 80']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'bollinger_squeeze_breakout',
+      name: 'Bollinger Band Squeeze Breakout',
+      description: 'Volatility breakout strategy using Bollinger Bands to identify low volatility periods followed by breakouts',
+      type: 'breakout',
+      parameters: {
+        symbol: 'ADAUSDT',
+        timeframe: '1h',
+        stopLoss: 2.5,
+        takeProfit: 5.0,
+        riskPercentage: 1.0,
+        maxPositions: 2,
+      },
+      conditions: {
+        entry: ['BB_Width < BB_Width_SMA_20', 'Price > BB_Upper', 'Volume > SMA_Volume_10'],
+        exit: ['Price < BB_Middle', 'Loss >= 2%']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'support_resistance_bounce',
+      name: 'Support/Resistance Bounce',
+      description: 'Price action strategy that trades bounces off key support and resistance levels',
+      type: 'price_action',
+      parameters: {
+        symbol: 'SOLUSDT',
+        timeframe: '2h',
+        stopLoss: 2.0,
+        takeProfit: 3.5,
+        riskPercentage: 1.5,
+        maxPositions: 2,
+      },
+      conditions: {
+        entry: ['Price <= Support + 0.5%', 'RSI < 40', 'Previous_Candle_Low > Support'],
+        exit: ['Price >= Resistance - 0.5%', 'RSI > 65']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'macd_divergence',
+      name: 'MACD Divergence Strategy',
+      description: 'Advanced momentum strategy using MACD divergence to identify potential reversal points',
+      type: 'momentum',
+      parameters: {
+        symbol: 'DOTUSDT',
+        timeframe: '1h',
+        stopLoss: 2.0,
+        takeProfit: 4.0,
+        riskPercentage: 1.0,
+        maxPositions: 2,
+      },
+      conditions: {
+        entry: ['MACD_Bullish_Divergence', 'Price < SMA_50', 'RSI < 50'],
+        exit: ['MACD < Signal', 'Profit >= 3%']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'ichimoku_cloud_breakout',
+      name: 'Ichimoku Cloud Breakout',
+      description: 'Advanced trend following strategy using Ichimoku Kinko Hyo cloud analysis for trend identification',
+      type: 'trend_following',
+      parameters: {
+        symbol: 'BTCUSDT',
+        timeframe: '4h',
+        stopLoss: 2.0,
+        takeProfit: 6.0,
+        riskPercentage: 1.5,
+        maxPositions: 1,
+      },
+      conditions: {
+        entry: ['Price > Kumo_Cloud', 'Tenkan > Kijun', 'Chikou > Price_26_ago', 'Volume > SMA_Volume_20'],
+        exit: ['Price < Kumo_Cloud', 'Tenkan < Kijun']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'stoch_rsi_scalping',
+      name: 'Stochastic RSI Scalping',
+      description: 'High-frequency scalping strategy using Stochastic RSI for quick entry and exit signals',
+      type: 'scalping',
+      parameters: {
+        symbol: 'ETHUSDT',
+        timeframe: '15m',
+        stopLoss: 1.0,
+        takeProfit: 1.5,
+        riskPercentage: 0.5,
+        maxPositions: 5,
+      },
+      conditions: {
+        entry: ['StochRSI_K < 20', 'StochRSI_K > StochRSI_D', 'Price > VWAP'],
+        exit: ['StochRSI_K > 80', 'Profit >= 0.8%']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'volume_profile_poc',
+      name: 'Volume Profile POC Strategy',
+      description: 'Advanced volume analysis strategy trading around Point of Control and high volume nodes',
+      type: 'volume_analysis',
+      parameters: {
+        symbol: 'SOLUSDT',
+        timeframe: '1h',
+        stopLoss: 2.5,
+        takeProfit: 4.0,
+        riskPercentage: 1.0,
+        maxPositions: 2,
+      },
+      conditions: {
+        entry: ['Price near POC', 'Volume > MVWAP', 'RSI between 30-70'],
+        exit: ['Price > Value_Area_High', 'Volume < SMA_Volume_10']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'fibonacci_retracement_swing',
+      name: 'Fibonacci Retracement Swing',
+      description: 'Swing trading strategy using Fibonacci retracement levels for entry and exit points',
+      type: 'swing_trading',
+      parameters: {
+        symbol: 'ADAUSDT',
+        timeframe: '2h',
+        stopLoss: 3.0,
+        takeProfit: 5.0,
+        riskPercentage: 2.0,
+        maxPositions: 2,
+      },
+      conditions: {
+        entry: ['Price at Fib_61.8', 'RSI < 45', 'MACD_Histogram increasing'],
+        exit: ['Price at Fib_23.6', 'RSI > 70']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'williams_r_momentum',
+      name: 'Williams %R Momentum',
+      description: 'Momentum strategy using Williams %R oscillator combined with trend confirmation',
+      type: 'momentum',
+      parameters: {
+        symbol: 'DOTUSDT',
+        timeframe: '1h',
+        stopLoss: 2.0,
+        takeProfit: 3.5,
+        riskPercentage: 1.5,
+        maxPositions: 3,
+      },
+      conditions: {
+        entry: ['Williams_R < -80', 'Price > EMA_21', 'ATR > ATR_SMA_14'],
+        exit: ['Williams_R > -20', 'EMA_12 < EMA_26']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
       id: 'trend_following_basic',
       name: 'Basic Trend Following',
       description: 'Simple moving average crossover strategy',
@@ -230,17 +490,8 @@ export default function LiveTradingStrategy() {
     }
   ];
 
-  // Fetch available strategies
-  const { data: strategies = [] } = useQuery({
-    queryKey: ['/api/live-strategy/strategies'],
-    refetchInterval: 5000,
-    staleTime: 1000,
-    select: (data) => {
-      // Always combine saved strategies with predefined templates
-      const savedStrategies = data || [];
-      return [...savedStrategies, ...predefinedStrategies];
-    }
-  });
+  // Use predefined strategies directly instead of fetching from API
+  const strategies = predefinedStrategies;
 
   // Update active state when selectedStrategy changes
   useEffect(() => {
@@ -254,19 +505,13 @@ export default function LiveTradingStrategy() {
     }
   }, [selectedStrategy, strategies]);
 
-  // Fetch live positions  
-  const { data: livePositions } = useQuery({
-    queryKey: ['/api/live-strategy/live-positions'],
-    refetchInterval: 2000
-  });
+  // No live positions - user will see empty state
+  const livePositions: LivePosition[] = [];
 
-  // Check API keys status
-  const { data: apiKeyStatus } = useQuery({
-    queryKey: ['/api/live-strategy/api-keys/status'],
-    onSuccess: (data) => {
-      setHasApiKeys(data.hasApiKeys);
-    }
-  });
+  // Mock API keys status
+  useEffect(() => {
+    setHasApiKeys(false); // User can set up API keys if needed
+  }, []);
 
   // Start/Stop strategy mutation
   const strategyControlMutation = useMutation({
@@ -559,7 +804,7 @@ export default function LiveTradingStrategy() {
             {selectedStrategy && strategies?.find((s: any) => s.id === selectedStrategy) && (
               <div className="p-4 border rounded-lg bg-gray-50">
                 {(() => {
-                  const strategy = strategies.find((s: any) => s.id === selectedStrategy);
+                  const strategy = strategies.find((s: any) => s.id === selectedStrategy)!; // Non-null assertion since we check above
                   return (
                     <div>
                       <div className="flex items-center justify-between mb-3">

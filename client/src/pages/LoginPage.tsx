@@ -20,8 +20,8 @@ export default function LoginPage() {
       return response.json();
     },
     onSuccess: (data) => {
-      // Store token in localStorage
-      localStorage.setItem('token', data.token);
+      // Store token in localStorage with the correct key
+      localStorage.setItem('userToken', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       
       toast({
@@ -29,7 +29,8 @@ export default function LoginPage() {
         description: `Welcome back, ${data.user.username}!`,
       });
       
-      setLocation('/');
+      // Refresh the page to trigger authentication check
+      window.location.href = '/';
     },
     onError: (error: any) => {
       toast({
