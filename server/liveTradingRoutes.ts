@@ -14,26 +14,38 @@ const livePrices: { [symbol: string]: number } = {};
 // Real-time market data service
 class MarketDataService {
   constructor() {
+    this.initializePrices();
+  }
+
+  private async initializePrices() {
+    // Fetch initial prices immediately
+    await this.updatePrices();
+    
+    // Then start the periodic updates
     this.startPriceUpdates();
+  }
+
+  private async updatePrices() {
+    const symbols = ['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT', 'DOTUSDT'];
+    
+    for (const symbol of symbols) {
+      try {
+        const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+        if (response.ok) {
+          const data = await response.json();
+          livePrices[symbol] = parseFloat(data.price);
+        }
+      } catch (error) {
+        // Fallback to simulated price if API fails
+        livePrices[symbol] = (livePrices[symbol] || 50000) * (0.99 + Math.random() * 0.02);
+      }
+    }
   }
 
   private async startPriceUpdates() {
     // Update prices from Binance API
     setInterval(async () => {
-      const symbols = ['BTCUSDT', 'ETHUSDT', 'ADAUSDT', 'SOLUSDT', 'DOTUSDT'];
-      
-      for (const symbol of symbols) {
-        try {
-          const response = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
-          if (response.ok) {
-            const data = await response.json();
-            livePrices[symbol] = parseFloat(data.price);
-          }
-        } catch (error) {
-          // Fallback to simulated price if API fails
-          livePrices[symbol] = (livePrices[symbol] || 50000) * (0.99 + Math.random() * 0.02);
-        }
-      }
+      await this.updatePrices();
     }, 3000);
   }
 
