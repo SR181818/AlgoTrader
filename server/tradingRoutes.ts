@@ -5,6 +5,7 @@ import { trades, backtests, users } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { authenticateToken } from './authRoutes';
+import { storage } from './storage';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ router.post('/backtest', authenticateToken, async (req: any, res: Response) => {
 
     // Fetch historical OHLCV data
     console.log(`Fetching historical data for ${symbol} from ${startDate} to ${endDate}`);
-    
+
     let allCandles: any[] = [];
     let currentSince = since;
     const limit = 1000; // Max candles per request
@@ -66,10 +67,10 @@ router.post('/backtest', authenticateToken, async (req: any, res: Response) => {
       try {
         const candles = await exchange.fetchOHLCV(symbol, timeframe, currentSince, limit);
         if (candles.length === 0) break;
-        
+
         allCandles = allCandles.concat(candles);
         currentSince = candles[candles.length - 1][0] + 1;
-        
+
         // Rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
@@ -133,7 +134,7 @@ router.post('/backtest', authenticateToken, async (req: any, res: Response) => {
 router.post('/trade', authenticateToken, async (req: any, res: Response) => {
   try {
     const tradeData = tradeSchema.parse(req.body);
-    
+
     // Get user's API credentials
     const [user] = await db
       .select()
@@ -156,9 +157,9 @@ router.post('/trade', authenticateToken, async (req: any, res: Response) => {
 
     // For demo purposes, we'll simulate the trade rather than execute it
     // In production, you would execute: await exchange.createMarketOrder(...)
-    
+
     const executedPrice = tradeData.type === 'market' ? currentPrice : (tradeData.price || currentPrice);
-    
+
     // Save trade to database
     const [savedTrade] = await db
       .insert(trades)
@@ -258,11 +259,11 @@ router.get('/portfolio', authenticateToken, async (req: any, res: Response) => {
 router.post('/strategy/preview', authenticateToken, async (req: any, res: Response) => {
   try {
     const { symbol, strategyConfig } = req.body;
-    
+
     // Fetch recent market data for preview
     const exchange = initializeExchange();
     const candles = await exchange.fetchOHLCV(symbol, '15m', undefined, 100);
-    
+
     const normalizedCandles = candles.map(candle => ({
       timestamp: candle[0],
       open: candle[1],
@@ -306,9 +307,9 @@ async function runBacktest(candles: any[], strategyConfig: any) {
     const recentCandles = candles.slice(i - 20, i);
     const sma10 = recentCandles.slice(-10).reduce((sum, c) => sum + c.close, 0) / 10;
     const sma20 = recentCandles.reduce((sum, c) => sum + c.close, 0) / 20;
-    
+
     const currentPrice = candles[i].close;
-    
+
     // Buy signal: SMA10 crosses above SMA20
     if (sma10 > sma20 && position <= 0) {
       if (position < 0) {
@@ -336,7 +337,7 @@ async function runBacktest(candles: any[], strategyConfig: any) {
     maxBalance = Math.max(maxBalance, totalValue);
     const drawdown = (maxBalance - totalValue) / maxBalance;
     maxDrawdown = Math.max(maxDrawdown, drawdown);
-    
+
     returns.push(totalValue / 10000 - 1);
   }
 
@@ -349,7 +350,7 @@ async function runBacktest(candles: any[], strategyConfig: any) {
 
   const totalReturn = (balance - 10000) / 10000;
   const winRate = trades > 0 ? wins / trades : 0;
-  
+
   // Calculate Sharpe ratio (simplified)
   const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
   const returnStd = Math.sqrt(returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length);
@@ -369,15 +370,15 @@ async function runBacktest(candles: any[], strategyConfig: any) {
 // Helper function to generate strategy signals
 async function generateStrategySignals(candles: any[], strategyConfig: any) {
   const signals = [];
-  
+
   for (let i = 20; i < candles.length; i++) {
     const recentCandles = candles.slice(i - 20, i);
     const sma10 = recentCandles.slice(-10).reduce((sum, c) => sum + c.close, 0) / 10;
     const sma20 = recentCandles.reduce((sum, c) => sum + c.close, 0) / 20;
-    
+
     let action = 'HOLD';
     let confidence = 0.5;
-    
+
     if (sma10 > sma20 * 1.01) {
       action = 'BUY';
       confidence = 0.8;
@@ -385,7 +386,7 @@ async function generateStrategySignals(candles: any[], strategyConfig: any) {
       action = 'SELL';
       confidence = 0.8;
     }
-    
+
     signals.push({
       timestamp: candles[i].timestamp,
       price: candles[i].close,
@@ -394,8 +395,145 @@ async function generateStrategySignals(candles: any[], strategyConfig: any) {
       indicators: { sma10, sma20 }
     });
   }
-  
+
   return signals;
 }
+
+// Get all strategies for the authenticated user  
+router.get('/strategies', async (req: any, res) => {
+  try {
+    const userId = req.user?.id || 1; // Fallback for development
+    console.log(`Fetching strategies for user ${userId}`);
+    
+    const userStrategies = await storage.getStrategies(userId);
+    console.log(`Found ${userStrategies.length} strategies for user ${userId}`);
+
+    // Transform database strategies to match Live Trading component format
+    const transformedStrategies = userStrategies.map(strategy => {
+      try {
+        return {
+          id: strategy.id.toString(),
+          name: strategy.name,
+          description: strategy.description || `Custom ${strategy.type || 'trading'} strategy`,
+          type: strategy.type || 'custom',
+          parameters: {
+            symbol: strategy.symbol || 'BTCUSDT',
+            timeframe: strategy.timeframe || '1h',
+            stopLoss: parseFloat(strategy.stopLoss || '2'),
+            takeProfit: parseFloat(strategy.takeProfit || '4'),
+            riskPercentage: parseFloat(strategy.riskPercentage || '1'),
+            maxPositions: strategy.maxPositions || 1,
+          },
+          conditions: {
+            entry: strategy.entryConditions ? 
+              (typeof strategy.entryConditions === 'string' ? 
+                JSON.parse(strategy.entryConditions) : strategy.entryConditions) : [],
+            exit: strategy.exitConditions ? 
+              (typeof strategy.exitConditions === 'string' ? 
+                JSON.parse(strategy.exitConditions) : strategy.exitConditions) : []
+          },
+          isActive: strategy.isActive || false,
+          performance: {
+            totalTrades: strategy.totalTrades || 0,
+            winRate: parseFloat(strategy.winRate || '0'),
+            pnl: parseFloat(strategy.pnl || '0'),
+            maxDrawdown: parseFloat(strategy.maxDrawdown || '0'),
+          },
+          source: 'database',
+          createdAt: strategy.createdAt,
+          updatedAt: strategy.updatedAt
+        };
+      } catch (parseError) {
+        console.error('Error parsing strategy:', strategy.id, parseError);
+        return {
+          id: strategy.id.toString(),
+          name: strategy.name || 'Untitled Strategy',
+          description: 'Custom trading strategy',
+          type: 'custom',
+          parameters: {
+            symbol: 'BTCUSDT',
+            timeframe: '1h',
+            stopLoss: 2,
+            takeProfit: 4,
+            riskPercentage: 1,
+            maxPositions: 1,
+          },
+          conditions: { entry: [], exit: [] },
+          isActive: false,
+          performance: { totalTrades: 0, winRate: 0, pnl: 0, maxDrawdown: 0 },
+          source: 'database'
+        };
+      }
+    });
+
+    res.json(transformedStrategies);
+  } catch (error) {
+    console.error('Error fetching strategies:', error);
+    res.status(500).json({ error: 'Failed to fetch strategies', details: error.message });
+  }
+});
+
+// Create a new strategy
+router.post('/strategies', async (req: any, res) => {
+  try {
+    const { name, type, parameters, conditions, description } = req.body;
+    const userId = req.user?.id || 1; // Fallback for development
+
+    // Create strategy object for database
+    const strategyData = {
+      userId: userId,
+      name: name,
+      description: description || `Custom ${type} strategy`,
+      type: type || 'custom',
+      symbol: parameters.symbol || 'BTCUSDT',
+      timeframe: parameters.timeframe || '1h',
+      stopLoss: parameters.stopLoss?.toString() || '2',
+      takeProfit: parameters.takeProfit?.toString() || '4',
+      riskPercentage: parameters.riskPercentage?.toString() || '1',
+      maxPositions: parameters.maxPositions || 1,
+      entryConditions: JSON.stringify(conditions.entry || []),
+      exitConditions: JSON.stringify(conditions.exit || []),
+      isActive: false,
+    };
+
+    // Save strategy to database
+    const newStrategy = await storage.createStrategy(strategyData);
+
+    const responseStrategy = {
+      id: newStrategy.id.toString(),
+      name: newStrategy.name,
+      description: newStrategy.description,
+      type: newStrategy.type,
+      parameters: {
+        symbol: newStrategy.symbol,
+        timeframe: newStrategy.timeframe,
+        stopLoss: parseFloat(newStrategy.stopLoss || '0'),
+        takeProfit: parseFloat(newStrategy.takeProfit || '0'),
+        riskPercentage: parseFloat(newStrategy.riskPercentage || '1'),
+        maxPositions: newStrategy.maxPositions || 1,
+      },
+      conditions: {
+        entry: JSON.parse(newStrategy.entryConditions || '[]'),
+        exit: JSON.parse(newStrategy.exitConditions || '[]')
+      },
+      isActive: newStrategy.isActive,
+      performance: {
+        totalTrades: newStrategy.totalTrades || 0,
+        winRate: parseFloat(newStrategy.winRate || '0'),
+        pnl: parseFloat(newStrategy.pnl || '0'),
+        maxDrawdown: parseFloat(newStrategy.maxDrawdown || '0'),
+      }
+    };
+
+    res.json({
+      success: true,
+      message: 'Strategy created successfully',
+      strategy: responseStrategy
+    });
+  } catch (error) {
+    console.error('Error creating strategy:', error);
+    res.status(500).json({ error: 'Failed to create strategy' });
+  }
+});
 
 export default router;

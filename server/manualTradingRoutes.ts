@@ -10,6 +10,21 @@ const router = express.Router();
 router.get('/balances/:userId', async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
+    
+    // Check if db.select is properly initialized
+    if (typeof db.select !== 'function') {
+      // Fallback for in-memory database
+      const balanceMap: { [key: string]: number } = {
+        USDT: 10000,
+        BTC: 0,
+        ETH: 0,
+        ADA: 0,
+        SOL: 0,
+        DOT: 0
+      };
+      return res.json(balanceMap);
+    }
+
     const balances = await db.select().from(manualTradingBalances).where(eq(manualTradingBalances.userId, userId));
     
     // Convert to expected format
@@ -22,9 +37,13 @@ router.get('/balances/:userId', async (req, res) => {
       DOT: 0
     };
 
-    balances.forEach(balance => {
-      balanceMap[balance.currency] = parseFloat(balance.balance);
-    });
+    if (Array.isArray(balances)) {
+      balances.forEach(balance => {
+        if (balance && balance.currency && balance.balance) {
+          balanceMap[balance.currency] = parseFloat(balance.balance);
+        }
+      });
+    }
 
     res.json(balanceMap);
   } catch (error) {

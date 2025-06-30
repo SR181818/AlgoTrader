@@ -10,6 +10,7 @@ import settingsRoutes from "./settingsRoutes";
 import liveSimulationRoutes from "./liveSimulationRoutes";
 import liveStrategyRoutes from "./liveStrategyRoutes";
 import manualTradingRoutes from "./manualTradingRoutes";
+import liveTradingRoutes from "./liveTradingRoutes";
 
 export function registerRoutes(app: Express) {
   // Authentication routes
@@ -26,6 +27,9 @@ export function registerRoutes(app: Express) {
   
   // Manual trading routes
   app.use("/api/manual-trading", manualTradingRoutes);
+  
+  // Live trading routes
+  app.use("/api/live-trading", liveTradingRoutes);
 
   // Live simulation endpoints
   app.post("/api/live-simulation/account", async (req, res) => {

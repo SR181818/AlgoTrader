@@ -57,18 +57,20 @@ export const liveSimulationAccounts = pgTable("live_simulation_accounts", {
 
 export const liveSimulationOrders = pgTable("live_simulation_orders", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
   accountId: integer("account_id").references(() => liveSimulationAccounts.id),
   symbol: text("symbol").notNull(),
   side: text("side").notNull(), // 'buy' | 'sell'
-  type: text("type").notNull(), // 'market' | 'limit' | 'stop'
-  quantity: numeric("quantity", { precision: 18, scale: 8 }).notNull(),
-  price: numeric("price", { precision: 18, scale: 8 }),
-  stopPrice: numeric("stop_price", { precision: 18, scale: 8 }),
+  orderType: text("order_type").notNull(), // 'market' | 'limit' | 'stop'
+  amount: text("amount").notNull(),
+  price: text("price"),
+  stopPrice: text("stop_price"),
   status: text("status").notNull().default("pending"), // 'pending' | 'filled' | 'cancelled' | 'rejected'
-  filledQuantity: numeric("filled_quantity", { precision: 18, scale: 8 }).notNull().default("0"),
-  filledPrice: numeric("filled_price", { precision: 18, scale: 8 }),
-  fees: numeric("fees", { precision: 18, scale: 8 }).notNull().default("0"),
-  pnl: numeric("pnl", { precision: 18, scale: 8 }),
+  filledQuantity: text("filled_quantity").notNull().default("0"),
+  filledPrice: text("filled_price"),
+  fees: text("fees").notNull().default("0"),
+  pnl: text("pnl"),
+  strategyId: integer("strategy_id").references(() => strategies.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   filledAt: timestamp("filled_at"),
@@ -76,18 +78,20 @@ export const liveSimulationOrders = pgTable("live_simulation_orders", {
 
 export const liveSimulationPositions = pgTable("live_simulation_positions", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
   accountId: integer("account_id").references(() => liveSimulationAccounts.id),
   symbol: text("symbol").notNull(),
-  side: text("side").notNull(), // 'long' | 'short'
-  quantity: numeric("quantity", { precision: 18, scale: 8 }).notNull(),
-  entryPrice: numeric("entry_price", { precision: 18, scale: 8 }).notNull(),
-  currentPrice: numeric("current_price", { precision: 18, scale: 8 }).notNull(),
-  unrealizedPnL: numeric("unrealized_pnl", { precision: 18, scale: 8 }).notNull().default("0"),
-  realizedPnL: numeric("realized_pnl", { precision: 18, scale: 8 }).notNull().default("0"),
-  isOpen: boolean("is_open").notNull().default(true),
+  side: text("side").notNull(), // 'buy' | 'sell'
+  amount: text("amount").notNull(),
+  entryPrice: text("entry_price").notNull(),
+  exitPrice: text("exit_price"),
+  exitTime: timestamp("exit_time"),
+  status: text("status").notNull().default("open"), // 'open' | 'closed'
+  unrealizedPnL: text("unrealized_pnl").notNull().default("0"),
+  realizedPnL: text("realized_pnl").notNull().default("0"),
+  strategyId: integer("strategy_id").references(() => strategies.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  closedAt: timestamp("closed_at"),
 });
 
 export const marketDataCache = pgTable("market_data_cache", {

@@ -1,387 +1,418 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+// import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Play, Pause, TrendingUp, TrendingDown, DollarSign, Activity, Target, AlertTriangle } from 'lucide-react';
-import { LiveStrategyRunner, StrategySignal, Position, StrategyConfig } from '../services/LiveStrategyRunner';
-import { binanceMarketData, TickerData } from '../services/BinanceMarketData';
+import { 
+  Activity, 
+  TrendingUp, 
+  TrendingDown, 
+  DollarSign, 
+  Target, 
+  Clock,
+  AlertTriangle,
+  CheckCircle,
+  XCircle
+} from 'lucide-react';
 
 export function LiveTradingDashboard() {
-  const [strategyRunner, setStrategyRunner] = useState<LiveStrategyRunner | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [signals, setSignals] = useState<StrategySignal[]>([]);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [currentTicker, setCurrentTicker] = useState<TickerData | null>(null);
-  const [config, setConfig] = useState<StrategyConfig>({
-    name: 'Multi-Indicator Strategy',
-    symbol: 'BTCUSDT',
-    enabled: true,
-    riskPerTrade: 1,
-    stopLoss: 2,
-    takeProfit: 4,
-    indicators: {
-      ema20: true,
-      ema50: true,
-      rsi: true,
-      macd: true
+  const [selectedStrategy, setSelectedStrategy] = useState<number | null>(null);
+  const queryClient = useQueryClient();
+
+  // Fetch dashboard data
+  const { data: dashboardData, isLoading: isDashboardLoading } = useQuery({
+    queryKey: ['/api/live-trading/dashboard'],
+    refetchInterval: 2000 // Refresh every 2 seconds for real-time data
+  });
+
+  // Fetch strategies
+  const { data: strategiesData } = useQuery({
+    queryKey: ['/api/live-trading/strategies']
+  });
+
+  // Fetch orders
+  const { data: ordersData } = useQuery({
+    queryKey: ['/api/live-trading/orders'],
+    refetchInterval: 3000
+  });
+
+  // Fetch positions
+  const { data: positionsData } = useQuery({
+    queryKey: ['/api/live-trading/positions'],
+    refetchInterval: 2000
+  });
+
+  // Execute order mutation
+  const executeOrderMutation = useMutation({
+    mutationFn: async (orderData: any) => {
+      const response = await fetch('/api/live-trading/order/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(orderData)
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/live-trading/orders'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/live-trading/positions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/live-trading/dashboard'] });
     }
   });
 
-  useEffect(() => {
-    // Subscribe to live ticker data
-    const subscription = binanceMarketData.subscribeToTicker(config.symbol).subscribe(
-      ticker => setCurrentTicker(ticker)
-    );
-
-    return () => subscription.unsubscribe();
-  }, [config.symbol]);
-
-  useEffect(() => {
-    if (strategyRunner) {
-      const signalSubscription = strategyRunner.getSignals().subscribe(setSignals);
-      const positionSubscription = strategyRunner.getPositions().subscribe(setPositions);
-
-      return () => {
-        signalSubscription.unsubscribe();
-        positionSubscription.unsubscribe();
-      };
+  // Close position mutation
+  const closePositionMutation = useMutation({
+    mutationFn: async (positionId: number) => {
+      const response = await fetch('/api/live-trading/position/close', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ positionId })
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/live-trading/positions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/live-trading/dashboard'] });
     }
-  }, [strategyRunner]);
+  });
 
-  const startStrategy = () => {
-    if (!strategyRunner) {
-      const runner = new LiveStrategyRunner(config);
-      setStrategyRunner(runner);
-      runner.start();
-      setIsRunning(true);
-    } else {
-      strategyRunner.start();
-      setIsRunning(true);
-    }
+  const dashboard = (dashboardData as any)?.data || {};
+  const strategies = (strategiesData as any)?.data || [];
+  const orders = (ordersData as any)?.data || [];
+  const positions = (positionsData as any)?.data || [];
+
+  const handleQuickTrade = (symbol: string, side: 'buy' | 'sell') => {
+    executeOrderMutation.mutate({
+      symbol,
+      side,
+      amount: 0.001,
+      orderType: 'market'
+    });
   };
 
-  const stopStrategy = () => {
-    if (strategyRunner) {
-      strategyRunner.stop();
-      setIsRunning(false);
-    }
+  const handleClosePosition = (positionId: number) => {
+    closePositionMutation.mutate(positionId);
   };
 
-  const updateConfig = (updates: Partial<StrategyConfig>) => {
-    const newConfig = { ...config, ...updates };
-    setConfig(newConfig);
-    if (strategyRunner) {
-      strategyRunner.updateConfig(newConfig);
-    }
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
   };
 
-  const totalPnL = positions
-    .filter(p => p.status === 'OPEN')
-    .reduce((sum, p) => sum + p.pnl, 0);
+  const formatPnL = (value: number) => {
+    const formatted = formatCurrency(Math.abs(value));
+    return value >= 0 ? `+${formatted}` : `-${formatted}`;
+  };
 
-  const totalPnLPercent = positions
-    .filter(p => p.status === 'OPEN')
-    .reduce((sum, p) => sum + p.pnlPercent, 0) / Math.max(positions.filter(p => p.status === 'OPEN').length, 1);
-
-  const winRate = positions.length > 0 
-    ? (positions.filter(p => p.status === 'CLOSED' && p.pnl > 0).length / positions.filter(p => p.status === 'CLOSED').length) * 100 
-    : 0;
+  if (isDashboardLoading) {
+    return <div className="flex items-center justify-center p-8">Loading dashboard...</div>;
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
+    <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Live Trading Strategy</h1>
-          <p className="text-gray-600">Real-time Binance data with automated signals</p>
-        </div>
-        <div className="flex items-center space-x-4">
-          <Badge variant={isRunning ? "default" : "secondary"}>
-            {isRunning ? "Running" : "Stopped"}
-          </Badge>
-          {isRunning ? (
-            <Button onClick={stopStrategy} variant="outline">
-              <Pause className="w-4 h-4 mr-2" />
-              Stop Strategy
-            </Button>
-          ) : (
-            <Button onClick={startStrategy}>
-              <Play className="w-4 h-4 mr-2" />
-              Start Strategy
-            </Button>
-          )}
+        <h1 className="text-3xl font-bold">Live Trading Dashboard</h1>
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-muted-foreground">Live Data</span>
+          </div>
         </div>
       </div>
 
-      {/* Live Market Data */}
+      {/* Portfolio Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Current Price</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total P&L</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${dashboard.totalPnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatPnL(dashboard.totalPnl || 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Realized + Unrealized P&L
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Portfolio Value</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${currentTicker?.price.toFixed(2) || '0.00'}
+              {formatCurrency(dashboard.totalValue || 0)}
             </div>
-            <div className="flex items-center text-sm">
-              {currentTicker && currentTicker.changePercent > 0 ? (
-                <TrendingUp className="w-4 h-4 text-green-500 mr-1" />
-              ) : (
-                <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
-              )}
-              <span className={currentTicker && currentTicker.changePercent > 0 ? "text-green-500" : "text-red-500"}>
-                {currentTicker?.changePercent.toFixed(2) || '0.00'}%
-              </span>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Current market value
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total PnL</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              ${totalPnL.toFixed(2)}
-            </div>
-            <div className={`text-sm ${totalPnLPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {totalPnLPercent.toFixed(2)}%
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Open Positions</CardTitle>
+            <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {positions.filter(p => p.status === 'OPEN').length}
-            </div>
-            <div className="text-sm text-gray-600">
-              Active trades
-            </div>
+            <div className="text-2xl font-bold">{dashboard.openPositionsCount || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Active trading positions
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {winRate.toFixed(1)}%
-            </div>
-            <div className="text-sm text-gray-600">
-              {positions.filter(p => p.status === 'CLOSED').length} trades
-            </div>
+            <div className="text-2xl font-bold">{dashboard.totalOrders || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Orders executed today
+            </p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Live Market Prices */}
+      {dashboard.marketPrices && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Live Market Prices</CardTitle>
+            <CardDescription>Real-time cryptocurrency prices</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {Object.entries(dashboard.marketPrices).map(([symbol, price]: [string, any]) => (
+                <div key={symbol} className="flex flex-col items-center space-y-2 p-3 border rounded-lg">
+                  <div className="font-semibold">{symbol.replace('USDT', '')}</div>
+                  <div className="text-lg font-bold">${typeof price === 'number' ? price.toFixed(2) : price}</div>
+                  <div className="flex space-x-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => handleQuickTrade(symbol, 'buy')}
+                      disabled={executeOrderMutation.isPending}
+                    >
+                      Buy
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => handleQuickTrade(symbol, 'sell')}
+                      disabled={executeOrderMutation.isPending}
+                    >
+                      Sell
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Main Trading Interface */}
       <Tabs defaultValue="positions" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="positions">Positions</TabsTrigger>
-          <TabsTrigger value="signals">Signals</TabsTrigger>
-          <TabsTrigger value="config">Configuration</TabsTrigger>
+          <TabsTrigger value="positions">Open Positions</TabsTrigger>
+          <TabsTrigger value="orders">Recent Orders</TabsTrigger>
+          <TabsTrigger value="strategies">Strategies</TabsTrigger>
         </TabsList>
 
         <TabsContent value="positions" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Active Positions</CardTitle>
-              <CardDescription>Real-time position tracking with live PnL</CardDescription>
+              <CardTitle>Open Positions</CardTitle>
+              <CardDescription>Your active trading positions with real-time P&L</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {positions.filter(p => p.status === 'OPEN').length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No open positions</p>
-                ) : (
-                  positions.filter(p => p.status === 'OPEN').map(position => (
-                    <div key={position.id} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between">
+              {positions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No open positions. Start trading to see your positions here.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {positions.map((position: any) => (
+                    <div key={position.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <Badge variant={position.side === 'buy' ? 'default' : 'secondary'}>
+                          {position.side.toUpperCase()}
+                        </Badge>
                         <div>
-                          <div className="flex items-center space-x-2">
-                            <Badge variant={position.side === 'LONG' ? 'default' : 'secondary'}>
-                              {position.side}
-                            </Badge>
-                            <span className="font-medium">{position.symbol}</span>
-                          </div>
-                          <div className="text-sm text-gray-600 mt-1">
-                            Entry: ${position.entryPrice.toFixed(2)} | Current: ${position.currentPrice.toFixed(2)}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`text-lg font-bold ${position.pnl >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            ${position.pnl.toFixed(2)}
-                          </div>
-                          <div className={`text-sm ${position.pnlPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {position.pnlPercent.toFixed(2)}%
+                          <div className="font-semibold">{position.symbol}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Amount: {position.amount} | Entry: ${parseFloat(position.entryPrice).toFixed(2)}
                           </div>
                         </div>
                       </div>
+                      
+                      <div className="flex items-center space-x-4">
+                        {position.currentPrice && (
+                          <div className="text-right">
+                            <div className="font-semibold">
+                              Current: ${parseFloat(position.currentPrice).toFixed(2)}
+                            </div>
+                            {position.unrealizedPnl && (
+                              <div className={`text-sm ${parseFloat(position.unrealizedPnl) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                P&L: {formatPnL(parseFloat(position.unrealizedPnl))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleClosePosition(position.id)}
+                          disabled={closePositionMutation.isPending}
+                        >
+                          Close Position
+                        </Button>
+                      </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="signals" className="space-y-4">
+        <TabsContent value="orders" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Trading Signals</CardTitle>
-              <CardDescription>Live signals from technical analysis</CardDescription>
+              <CardTitle>Recent Orders</CardTitle>
+              <CardDescription>Your trading order history</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {signals.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No signals generated yet</p>
-                ) : (
-                  signals.slice(0, 10).map(signal => (
-                    <div key={signal.id} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between">
+              {orders.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No orders yet. Execute your first trade to see orders here.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {orders.slice(0, 10).map((order: any) => (
+                    <div key={order.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <Badge variant={order.side === 'buy' ? 'default' : 'secondary'}>
+                          {order.side.toUpperCase()}
+                        </Badge>
                         <div>
-                          <div className="flex items-center space-x-2">
-                            <Badge 
-                              variant={signal.action === 'BUY' ? 'default' : signal.action === 'SELL' ? 'destructive' : 'secondary'}
-                            >
-                              {signal.action}
-                            </Badge>
-                            <span className="font-medium">{signal.symbol}</span>
-                            <span className="text-sm text-gray-600">${signal.price.toFixed(2)}</span>
-                          </div>
-                          <div className="text-sm text-gray-600 mt-1">
-                            {signal.reason}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-medium">
-                            Confidence: {(signal.confidence * 100).toFixed(0)}%
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {new Date(signal.timestamp).toLocaleTimeString()}
+                          <div className="font-semibold">{order.symbol}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {order.orderType} | Amount: {order.amount}
                           </div>
                         </div>
                       </div>
+                      
+                      <div className="flex items-center space-x-4">
+                        <div className="text-right">
+                          <div className="font-semibold">${parseFloat(order.price).toFixed(2)}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(order.createdAt).toLocaleTimeString()}
+                          </div>
+                        </div>
+                        
+                        <Badge variant={
+                          order.status === 'filled' ? 'default' : 
+                          order.status === 'pending' ? 'secondary' : 
+                          'destructive'
+                        }>
+                          {order.status === 'filled' && <CheckCircle className="w-3 h-3 mr-1" />}
+                          {order.status === 'pending' && <Clock className="w-3 h-3 mr-1" />}
+                          {order.status === 'rejected' && <XCircle className="w-3 h-3 mr-1" />}
+                          {order.status}
+                        </Badge>
+                      </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="config" className="space-y-4">
+        <TabsContent value="strategies" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Strategy Configuration</CardTitle>
-              <CardDescription>Customize your trading strategy parameters</CardDescription>
+              <CardTitle>Trading Strategies</CardTitle>
+              <CardDescription>Your automated trading strategies</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="symbol">Trading Symbol</Label>
-                  <Select value={config.symbol} onValueChange={(value) => updateConfig({ symbol: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select symbol" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="BTCUSDT">BTC/USDT</SelectItem>
-                      <SelectItem value="ETHUSDT">ETH/USDT</SelectItem>
-                      <SelectItem value="ADAUSDT">ADA/USDT</SelectItem>
-                      <SelectItem value="DOTUSDT">DOT/USDT</SelectItem>
-                    </SelectContent>
-                  </Select>
+            <CardContent>
+              {strategies.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No strategies found.</p>
+                  <p className="text-sm mt-2">Create strategies in the Strategy Builder to automate your trading.</p>
                 </div>
-
-                <div>
-                  <Label htmlFor="risk">Risk Per Trade (%)</Label>
-                  <Input
-                    id="risk"
-                    type="number"
-                    value={config.riskPerTrade}
-                    onChange={(e) => updateConfig({ riskPerTrade: parseFloat(e.target.value) })}
-                    min="0.1"
-                    max="10"
-                    step="0.1"
-                  />
+              ) : (
+                <div className="space-y-4">
+                  {strategies.map((strategy: any) => (
+                    <div key={strategy.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <div className="font-semibold">{strategy.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {strategy.description || `${strategy.type} strategy for ${strategy.symbol}`}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-4">
+                        <Badge variant={strategy.isActive ? 'default' : 'secondary'}>
+                          {strategy.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                        
+                        <Button 
+                          size="sm" 
+                          variant={strategy.isActive ? 'outline' : 'default'}
+                          disabled
+                        >
+                          {strategy.isActive ? 'Stop' : 'Start'}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-
-                <div>
-                  <Label htmlFor="stopLoss">Stop Loss (%)</Label>
-                  <Input
-                    id="stopLoss"
-                    type="number"
-                    value={config.stopLoss}
-                    onChange={(e) => updateConfig({ stopLoss: parseFloat(e.target.value) })}
-                    min="0.5"
-                    max="10"
-                    step="0.1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="takeProfit">Take Profit (%)</Label>
-                  <Input
-                    id="takeProfit"
-                    type="number"
-                    value={config.takeProfit}
-                    onChange={(e) => updateConfig({ takeProfit: parseFloat(e.target.value) })}
-                    min="1"
-                    max="20"
-                    step="0.1"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <Label>Technical Indicators</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="ema20"
-                      checked={config.indicators.ema20}
-                      onCheckedChange={(checked) => updateConfig({ indicators: { ...config.indicators, ema20: checked } })}
-                    />
-                    <Label htmlFor="ema20">EMA 20</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="ema50"
-                      checked={config.indicators.ema50}
-                      onCheckedChange={(checked) => updateConfig({ indicators: { ...config.indicators, ema50: checked } })}
-                    />
-                    <Label htmlFor="ema50">EMA 50</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="rsi"
-                      checked={config.indicators.rsi}
-                      onCheckedChange={(checked) => updateConfig({ indicators: { ...config.indicators, rsi: checked } })}
-                    />
-                    <Label htmlFor="rsi">RSI</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="macd"
-                      checked={config.indicators.macd}
-                      onCheckedChange={(checked) => updateConfig({ indicators: { ...config.indicators, macd: checked } })}
-                    />
-                    <Label htmlFor="macd">MACD</Label>
-                  </div>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Status Messages */}
+      {(executeOrderMutation.isError || closePositionMutation.isError) && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2 text-red-700">
+              <AlertTriangle className="h-4 w-4" />
+              <span>{executeOrderMutation.error?.message || closePositionMutation.error?.message || 'An error occurred'}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {executeOrderMutation.isSuccess && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2 text-green-700">
+              <CheckCircle className="h-4 w-4" />
+              <span>Order executed successfully!</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -64,11 +64,189 @@ export default function LiveTradingStrategy() {
   });
   const { toast } = useToast();
 
+  // Define predefined template strategies
+  const predefinedStrategies = [
+    {
+      id: 'trend_following_basic',
+      name: 'Basic Trend Following',
+      description: 'Simple moving average crossover strategy',
+      type: 'trend_following',
+      parameters: {
+        symbol: 'BTCUSDT',
+        timeframe: '1h',
+        stopLoss: 2,
+        takeProfit: 4,
+        riskPercentage: 1,
+        maxPositions: 1,
+      },
+      conditions: {
+        entry: ['SMA_20 > SMA_50', 'RSI > 50'],
+        exit: ['SMA_20 < SMA_50', 'RSI < 30']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'mean_reversion_rsi',
+      name: 'RSI Mean Reversion',
+      description: 'RSI-based mean reversion strategy',
+      type: 'mean_reversion',
+      parameters: {
+        symbol: 'ETHUSDT',
+        timeframe: '15m',
+        stopLoss: 1.5,
+        takeProfit: 3,
+        riskPercentage: 1.5,
+        maxPositions: 2,
+      },
+      conditions: {
+        entry: ['RSI < 30', 'Price near Bollinger Lower Band'],
+        exit: ['RSI > 70', 'Price near Bollinger Upper Band']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'momentum_macd',
+      name: 'MACD Momentum',
+      description: 'MACD signal line crossover strategy',
+      type: 'momentum',
+      parameters: {
+        symbol: 'ADAUSDT',
+        timeframe: '4h',
+        stopLoss: 2.5,
+        takeProfit: 5,
+        riskPercentage: 1,
+        maxPositions: 1,
+      },
+      conditions: {
+        entry: ['MACD line crosses above Signal line', 'MACD > 0'],
+        exit: ['MACD line crosses below Signal line', 'MACD < 0']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'bollinger_bands_squeeze',
+      name: 'Bollinger Bands Squeeze',
+      description: 'Volatility breakout strategy using Bollinger Bands',
+      type: 'volatility',
+      parameters: {
+        symbol: 'SOLUSDT',
+        timeframe: '30m',
+        stopLoss: 2,
+        takeProfit: 6,
+        riskPercentage: 1.2,
+        maxPositions: 1,
+      },
+      conditions: {
+        entry: ['BB Width < 20-day average', 'Price breaks above/below BB'],
+        exit: ['BB Width > 20-day average', 'Price returns to BB middle']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'scalping_5min',
+      name: '5-Minute Scalping',
+      description: 'Quick scalping strategy for short-term profits',
+      type: 'scalping',
+      parameters: {
+        symbol: 'BTCUSDT',
+        timeframe: '5m',
+        stopLoss: 0.5,
+        takeProfit: 1.5,
+        riskPercentage: 0.5,
+        maxPositions: 3,
+      },
+      conditions: {
+        entry: ['EMA_9 > EMA_21', 'RSI between 40-60', 'Volume > 1.5x average'],
+        exit: ['EMA_9 < EMA_21', 'RSI > 70 or RSI < 30']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    },
+    {
+      id: 'grid_trading',
+      name: 'Grid Trading Strategy',
+      description: 'Places buy/sell orders at regular intervals',
+      type: 'grid',
+      parameters: {
+        symbol: 'ETHUSDT',
+        timeframe: '1h',
+        stopLoss: 5,
+        takeProfit: 10,
+        riskPercentage: 2,
+        maxPositions: 5,
+      },
+      conditions: {
+        entry: ['Price at grid level', 'Market in range'],
+        exit: ['Grid level hit', 'Market breaks range']
+      },
+      isActive: false,
+      performance: {
+        totalTrades: 0,
+        winRate: 0,
+        pnl: 0,
+        maxDrawdown: 0,
+      },
+      source: 'predefined'
+    }
+  ];
+
   // Fetch available strategies
-  const { data: strategies } = useQuery({
+  const { data: strategies = [] } = useQuery({
     queryKey: ['/api/live-strategy/strategies'],
-    refetchInterval: 5000
+    refetchInterval: 5000,
+    staleTime: 1000,
+    select: (data) => {
+      // Always combine saved strategies with predefined templates
+      const savedStrategies = data || [];
+      return [...savedStrategies, ...predefinedStrategies];
+    }
   });
+
+  // Update active state when selectedStrategy changes
+  useEffect(() => {
+    if (selectedStrategy && strategies) {
+      const strategy = strategies.find((s: any) => s.id === selectedStrategy);
+      if (strategy) {
+        setIsStrategyActive(strategy.isActive || false);
+      }
+    } else {
+      setIsStrategyActive(false);
+    }
+  }, [selectedStrategy, strategies]);
 
   // Fetch live positions  
   const { data: livePositions } = useQuery({
@@ -79,7 +257,7 @@ export default function LiveTradingStrategy() {
   // Start/Stop strategy mutation
   const strategyControlMutation = useMutation({
     mutationFn: async ({ action, strategyId }: { action: 'start' | 'stop'; strategyId: string }) => {
-      const response = await apiRequest('POST', `/api/trading/strategy/${action}`, { strategyId });
+      const response = await apiRequest('POST', `/api/live-strategy/strategy/${action}`, { strategyId });
       return response.json();
     },
     onSuccess: (data) => {
@@ -88,6 +266,8 @@ export default function LiveTradingStrategy() {
         title: data.isActive ? 'Strategy Started' : 'Strategy Stopped',
         description: data.message,
       });
+      // Refetch strategies to update their status
+      window.location.reload(); // Simple way to refresh data
     },
     onError: (error: any) => {
       toast({
@@ -101,7 +281,7 @@ export default function LiveTradingStrategy() {
   // Create custom strategy mutation
   const createStrategyMutation = useMutation({
     mutationFn: async (strategy: any) => {
-      const response = await apiRequest('POST', '/api/trading/strategies', strategy);
+      const response = await apiRequest('POST', '/api/live-strategy/strategies', strategy);
       return response.json();
     },
     onSuccess: (data) => {
@@ -123,7 +303,7 @@ export default function LiveTradingStrategy() {
   // Manual trade execution mutation
   const executeManualTradeMutation = useMutation({
     mutationFn: async (trade: { symbol: string; side: 'buy' | 'sell'; amount: number; type: 'market' | 'limit'; price?: number }) => {
-      const response = await apiRequest('POST', '/api/trading/manual-execute', trade);
+      const response = await apiRequest('POST', '/api/live-strategy/manual-execute', trade);
       return response.json();
     },
     onSuccess: (data) => {
@@ -197,53 +377,137 @@ export default function LiveTradingStrategy() {
             <span>Live Trading Strategy</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+        <CardContent className="space-y-6">
+          {/* Strategy Selection Dropdown */}
+          <div className="space-y-4">
             <div>
-              <Label>Select Strategy</Label>
+              <Label htmlFor="strategy-select">Select Trading Strategy</Label>
               <Select value={selectedStrategy} onValueChange={setSelectedStrategy}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a strategy" />
+                <SelectTrigger id="strategy-select">
+                  <SelectValue placeholder="Choose a strategy to start trading..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {Array.isArray(strategies) && strategies.map((strategy: Strategy) => (
-                    <SelectItem key={strategy.id} value={strategy.id}>
-                      {strategy.name} - {strategy.type}
-                    </SelectItem>
-                  ))}
+                  {strategies?.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      <p>No strategies available</p>
+                      <p className="text-xs mt-1">Create strategies in Strategy Builder or use templates below</p>
+                    </div>
+                  ) : (
+                    strategies?.map((strategy: any) => (
+                      <SelectItem key={strategy.id} value={strategy.id}>
+                        <div className="flex items-center justify-between w-full">
+                          <div className="flex flex-col">
+                            <span className="font-medium">{strategy.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {strategy.parameters?.symbol} • {strategy.parameters?.timeframe} • {strategy.type}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 ml-2">
+                            <span className={`px-2 py-1 text-xs rounded ${
+                              strategy.source === 'database' ? 'bg-blue-100 text-blue-800' :
+                              strategy.source === 'predefined' ? 'bg-purple-100 text-purple-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {strategy.source === 'database' ? 'Custom' : 
+                               strategy.source === 'predefined' ? 'Template' : 'Draft'}
+                            </span>
+                            {strategy.isActive && (
+                              <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">
+                                Active
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="flex items-end space-x-2">
-              <Button
-                onClick={() => handleStrategyControl('start')}
-                disabled={isStrategyActive || strategyControlMutation.isPending}
-                className="flex-1"
-              >
-                <Play className="w-4 h-4 mr-2" />
-                Start Strategy
-              </Button>
-              <Button
-                onClick={() => handleStrategyControl('stop')}
-                disabled={!isStrategyActive || strategyControlMutation.isPending}
-                variant="outline"
-                className="flex-1"
-              >
-                <Pause className="w-4 h-4 mr-2" />
-                Stop Strategy
-              </Button>
-            </div>
+            {/* Strategy Details Card */}
+            {selectedStrategy && strategies?.find((s: any) => s.id === selectedStrategy) && (
+              <div className="p-4 border rounded-lg bg-gray-50">
+                {(() => {
+                  const strategy = strategies.find((s: any) => s.id === selectedStrategy);
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium">{strategy.name}</h4>
+                        <Badge variant={strategy.isActive ? "default" : "secondary"}>
+                          {strategy.isActive ? "ACTIVE" : "INACTIVE"}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">{strategy.description}</p>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-500">Symbol:</span>
+                          <span className="ml-1 font-medium">{strategy.parameters?.symbol}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Timeframe:</span>
+                          <span className="ml-1 font-medium">{strategy.parameters?.timeframe}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Win Rate:</span>
+                          <span className="ml-1 font-medium">{strategy.performance?.winRate?.toFixed(1) || '0.0'}%</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Total PnL:</span>
+                          <span className={`ml-1 font-medium ${
+                            (strategy.performance?.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {(strategy.performance?.pnl || 0) >= 0 ? '+' : ''}{(strategy.performance?.pnl || 0).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
 
-          {/* Strategy Status */}
-          <div className="flex items-center space-x-2">
-            <Badge variant={isStrategyActive ? "default" : "secondary"}>
-              {isStrategyActive ? "ACTIVE" : "INACTIVE"}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              {isStrategyActive ? "Strategy is running and monitoring markets" : "Strategy is stopped"}
-            </span>
+          {/* Trading Controls */}
+          <div className="flex items-center justify-between p-4 border rounded-lg bg-white">
+            <div className="flex items-center space-x-3">
+              <div className={`w-3 h-3 rounded-full ${isStrategyActive ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+              <div>
+                <p className="font-medium">
+                  {isStrategyActive ? 'Trading Active' : 'Trading Inactive'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {isStrategyActive 
+                    ? 'Strategy is monitoring markets and executing trades' 
+                    : selectedStrategy 
+                      ? 'Ready to start trading' 
+                      : 'Select a strategy to begin'
+                  }
+                </p>
+              </div>
+            </div>
+
+            <div className="flex space-x-2">
+              {!isStrategyActive ? (
+                <Button
+                  onClick={() => handleStrategyControl('start')}
+                  disabled={!selectedStrategy || strategyControlMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  {strategyControlMutation.isPending ? 'Starting...' : 'Start Trading'}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => handleStrategyControl('stop')}
+                  disabled={strategyControlMutation.isPending}
+                  variant="destructive"
+                >
+                  <Pause className="w-4 h-4 mr-2" />
+                  {strategyControlMutation.isPending ? 'Stopping...' : 'Stop Trading'}
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

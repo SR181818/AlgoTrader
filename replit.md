@@ -120,4 +120,9 @@ Preferred communication style: Simple, everyday language.
 ## Changelog
 
 Changelog:
+- June 29, 2025. Successfully migrated project from Replit Agent to Replit environment
+  - Fixed database configuration with in-memory mock database for development
+  - Resolved strategy saving and fetching functionality
+  - Fixed strategy preview and test functionality
+  - All core trading features now working (strategy builder, preview, test, live trading)
 - June 27, 2025. Initial setup

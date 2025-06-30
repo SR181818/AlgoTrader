@@ -63,12 +63,12 @@ export default function StrategyBuilderPage() {
     setActiveIndicator(null);
 
     const { active, over } = event;
-    
+
     if (over && active.id !== over.id) {
       // Handle reordering
       const oldIndex = strategy.rules.findIndex(rule => rule.id === active.id);
       const newIndex = strategy.rules.findIndex(rule => rule.id === over.id);
-      
+
       if (oldIndex !== -1 && newIndex !== -1) {
         setStrategy(prev => ({
           ...prev,
@@ -108,10 +108,50 @@ export default function StrategyBuilderPage() {
     }));
   };
 
-  const handleSaveStrategy = () => {
-    localStorage.setItem('savedStrategy', JSON.stringify(strategy));
-    localStorage.setItem('hasUsedStrategyBuilder', 'true');
-    alert('Strategy saved successfully!');
+  const handleSaveStrategy = async () => {
+    try {
+      // Save to database
+      const strategyData = {
+        name: strategy.name,
+        description: strategy.description || `Custom strategy built with Strategy Builder`,
+        type: 'custom',
+        parameters: {
+          symbol: 'BTCUSDT', // Default symbol, can be made configurable
+          timeframe: '1h',
+          stopLoss: 2,
+          takeProfit: 4,
+          riskPercentage: 1,
+          maxPositions: 1,
+        },
+        conditions: {
+          entry: strategy.rules.filter(rule => rule.type === 'entry').map(rule => rule.conditions),
+          exit: strategy.rules.filter(rule => rule.type === 'exit').map(rule => rule.conditions)
+        }
+      };
+
+      const response = await fetch('/api/trading/strategies', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(strategyData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        localStorage.setItem('savedStrategy', JSON.stringify(strategy));
+        localStorage.setItem('hasUsedStrategyBuilder', 'true');
+        alert(`Strategy "${strategy.name}" saved successfully to database!`);
+      } else {
+        throw new Error('Failed to save strategy to database');
+      }
+    } catch (error) {
+      console.error('Error saving strategy:', error);
+      // Fallback to localStorage
+      localStorage.setItem('savedStrategy', JSON.stringify(strategy));
+      localStorage.setItem('hasUsedStrategyBuilder', 'true');
+      alert('Strategy saved locally (database save failed)');
+    }
   };
 
   const handleLoadTemplate = (template: StrategyConfig) => {
@@ -133,7 +173,7 @@ export default function StrategyBuilderPage() {
         onShowTemplates={() => setShowTemplates(true)}
         onShowSettings={() => setShowSettings(true)}
       />
-      
+
       <div className="container mx-auto px-4 py-6">
         {isNewUser && !showOnboarding && (
           <motion.div 
@@ -156,7 +196,7 @@ export default function StrategyBuilderPage() {
             </div>
           </motion.div>
         )}
-        
+
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="w-full lg:w-3/4 space-y-6">
             <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
@@ -184,7 +224,7 @@ export default function StrategyBuilderPage() {
                   </button>
                 </div>
               </div>
-              
+
               <DndContext
                 sensors={sensors}
                 onDragStart={handleDragStart}
@@ -206,13 +246,13 @@ export default function StrategyBuilderPage() {
               </DndContext>
             </div>
           </div>
-          
+
           <div className="w-full lg:w-1/4 space-y-6">
             <IndicatorPanel 
               onAddIndicator={handleAddRule}
               strategy={strategy}
             />
-            
+
             <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
               <h3 className="text-lg font-semibold mb-3 flex items-center">
                 <HelpCircle size={18} className="text-blue-400 mr-2" />
@@ -229,18 +269,18 @@ export default function StrategyBuilderPage() {
           </div>
         </div>
       </div>
-      
+
       {showOnboarding && (
         <OnboardingFlow onComplete={handleCompleteOnboarding} onSkip={handleCompleteOnboarding} />
       )}
-      
+
       {showTemplates && (
         <TemplateGallery 
           onClose={() => setShowTemplates(false)} 
           onSelectTemplate={handleLoadTemplate}
         />
       )}
-      
+
       {showSettings && (
         <StrategySettings 
           strategy={strategy}

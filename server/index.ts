@@ -4,6 +4,9 @@ import { setupVite, serveStatic, log } from "./vite";
 import settingsRoutes from "./settingsRoutes";
 import liveSimulationRoutes from "./liveSimulationRoutes";
 import manualTradingRoutes from "./manualTradingRoutes";
+import liveStrategyRoutes from './liveStrategyRoutes';
+import liveTradingRoutes from './liveTradingRoutes';
+import tradingRoutes from './tradingRoutes';
 
 const app = express();
 app.use(express.json());
@@ -45,6 +48,9 @@ app.use((req, res, next) => {
   app.use("/api/settings", settingsRoutes);
   app.use("/api/live-simulation", liveSimulationRoutes);
   app.use("/api/manual-trading", manualTradingRoutes);
+  app.use('/api/live-strategy', liveStrategyRoutes);
+  app.use('/api/live-trading', liveTradingRoutes);
+  app.use('/api/trading', tradingRoutes);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
