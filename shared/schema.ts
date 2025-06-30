@@ -157,6 +157,38 @@ export const strategies = pgTable("strategies", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const livePositions = pgTable('live_positions', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id),
+  strategyId: integer('strategy_id').references(() => strategies.id),
+  symbol: text('symbol').notNull(),
+  side: text('side').notNull(),
+  size: numeric('size', { precision: 20, scale: 8 }).notNull(),
+  entryPrice: numeric('entry_price', { precision: 20, scale: 8 }).notNull(),
+  currentPrice: numeric('current_price', { precision: 20, scale: 8 }).notNull(),
+  pnl: numeric('pnl', { precision: 20, scale: 8 }).default('0'),
+  pnlPercent: numeric('pnl_percent', { precision: 10, scale: 4 }).default('0'),
+  orderId: text('order_id'),
+  isLive: boolean('is_live').default(false),
+  status: text('status').default('open'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const liveTrades = pgTable('live_trades', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id),
+  strategyId: integer('strategy_id').references(() => strategies.id),
+  symbol: text('symbol').notNull(),
+  side: text('side').notNull(),
+  amount: numeric('amount', { precision: 20, scale: 8 }).notNull(),
+  price: numeric('price', { precision: 20, scale: 8 }).notNull(),
+  orderId: text('order_id'),
+  status: text('status').default('filled'),
+  isLive: boolean('is_live').default(false),
+  executedAt: timestamp('executed_at').defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = z.infer<typeof insertUserSchema>;

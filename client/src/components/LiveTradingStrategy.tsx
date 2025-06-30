@@ -62,6 +62,12 @@ export default function LiveTradingStrategy() {
     entryConditions: '',
     exitConditions: ''
   });
+  const [apiKeys, setApiKeys] = useState({
+    binanceApiKey: '',
+    binanceApiSecret: ''
+  });
+  const [showApiKeyForm, setShowApiKeyForm] = useState(false);
+  const [hasApiKeys, setHasApiKeys] = useState(false);
   const { toast } = useToast();
 
   // Define predefined template strategies
@@ -254,6 +260,14 @@ export default function LiveTradingStrategy() {
     refetchInterval: 2000
   });
 
+  // Check API keys status
+  const { data: apiKeyStatus } = useQuery({
+    queryKey: ['/api/live-strategy/api-keys/status'],
+    onSuccess: (data) => {
+      setHasApiKeys(data.hasApiKeys);
+    }
+  });
+
   // Start/Stop strategy mutation
   const strategyControlMutation = useMutation({
     mutationFn: async ({ action, strategyId }: { action: 'start' | 'stop'; strategyId: string }) => {
@@ -309,12 +323,36 @@ export default function LiveTradingStrategy() {
     onSuccess: (data) => {
       toast({
         title: 'Trade Executed',
-        description: `${data.side.toUpperCase()} ${data.amount} ${data.symbol} at ${data.price}`,
+        description: `${data.side.toUpperCase()} ${data.amount} ${data.symbol} at ${data.price}${data.live ? ' (Live)' : ' (Paper)'}`,
       });
     },
     onError: (error: any) => {
       toast({
         title: 'Trade Execution Failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // API key save mutation
+  const saveApiKeysMutation = useMutation({
+    mutationFn: async (keys: { binanceApiKey: string; binanceApiSecret: string }) => {
+      const response = await apiRequest('POST', '/api/live-strategy/api-keys', keys);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: 'API Keys Saved',
+        description: 'Your Binance API keys have been encrypted and saved securely',
+      });
+      setHasApiKeys(true);
+      setShowApiKeyForm(false);
+      setApiKeys({ binanceApiKey: '', binanceApiSecret: '' });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Failed to Save API Keys',
         description: error.message,
         variant: 'destructive',
       });
@@ -367,8 +405,100 @@ export default function LiveTradingStrategy() {
     });
   };
 
+  const handleSaveApiKeys = () => {
+    if (!apiKeys.binanceApiKey || !apiKeys.binanceApiSecret) {
+      toast({
+        title: 'Missing API Keys',
+        description: 'Please enter both API key and secret',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    saveApiKeysMutation.mutate(apiKeys);
+  };
+
   return (
     <div className="space-y-6">
+      {/* API Key Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Settings className="w-5 h-5" />
+            <span>Trading Configuration</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div>
+              <h4 className="font-medium">Binance API Keys</h4>
+              <p className="text-sm text-muted-foreground">
+                {hasApiKeys 
+                  ? 'API keys configured - Live trading enabled' 
+                  : 'Configure API keys to enable live trading'}
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Badge variant={hasApiKeys ? "default" : "secondary"}>
+                {hasApiKeys ? "Configured" : "Not Set"}
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowApiKeyForm(!showApiKeyForm)}
+              >
+                {hasApiKeys ? 'Update Keys' : 'Add Keys'}
+              </Button>
+            </div>
+          </div>
+
+          {showApiKeyForm && (
+            <div className="space-y-4 p-4 border rounded-lg bg-gray-50">
+              <div>
+                <Label>Binance API Key</Label>
+                <Input
+                  type="password"
+                  value={apiKeys.binanceApiKey}
+                  onChange={(e) => setApiKeys({ ...apiKeys, binanceApiKey: e.target.value })}
+                  placeholder="Enter your Binance API key"
+                />
+              </div>
+              <div>
+                <Label>Binance API Secret</Label>
+                <Input
+                  type="password"
+                  value={apiKeys.binanceApiSecret}
+                  onChange={(e) => setApiKeys({ ...apiKeys, binanceApiSecret: e.target.value })}
+                  placeholder="Enter your Binance API secret"
+                />
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  onClick={handleSaveApiKeys}
+                  disabled={saveApiKeysMutation.isPending}
+                  className="flex-1"
+                >
+                  {saveApiKeysMutation.isPending ? 'Saving...' : 'Save API Keys'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowApiKeyForm(false);
+                    setApiKeys({ binanceApiKey: '', binanceApiSecret: '' });
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                ⚠️ API keys are encrypted and stored securely. Without API keys, all trades will be paper trades.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Strategy Selection */}
       <Card>
         <CardHeader>

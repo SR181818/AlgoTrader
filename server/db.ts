@@ -1,3 +1,4 @@
+
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import ws from "ws";
@@ -5,18 +6,26 @@ import * as schema from "@shared/schema";
 
 neonConfig.webSocketConstructor = ws;
 
-// Database configuration
-const databaseUrl = process.env.DATABASE_URL;
+// Database configuration - now supports Supabase
+const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
 
 if (!databaseUrl) {
-  console.warn('DATABASE_URL not set. Please add a PostgreSQL database in Replit Secrets.');
+  console.warn('DATABASE_URL or SUPABASE_DB_URL not set. Please add a PostgreSQL database in Replit Secrets.');
   console.warn('Using in-memory fallback for development.');
 }
 
 // Fallback in-memory storage for development
 const inMemoryData: any = {
   users: [
-    { id: 1, username: 'demo', email: 'demo@example.com' }
+    { 
+      id: 1, 
+      username: 'demo', 
+      email: 'demo@example.com',
+      binanceApiKey: null,
+      binanceApiSecret: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
   ],
   strategies: [
     {
@@ -42,18 +51,13 @@ const inMemoryData: any = {
       updatedAt: new Date()
     }
   ],
-  trades: [],
-  backtests: [],
-  liveSimulationAccounts: [],
-  liveSimulationOrders: [],
-  liveSimulationPositions: [],
-  marketDataCache: [],
+  livePositions: [],
+  liveTrades: [],
   manualTradingBalances: [
     { id: 1, userId: 1, symbol: 'USD', balance: 10000 },
     { id: 2, userId: 1, symbol: 'BTC', balance: 0 },
     { id: 3, userId: 1, symbol: 'ETH', balance: 0 }
-  ],
-  manualTradingTransactions: []
+  ]
 };
 
 // Create database connection or fallback
@@ -61,15 +65,28 @@ let db: any;
 let pool: any;
 
 if (databaseUrl) {
-  // Use real PostgreSQL database
+  // Use real PostgreSQL database (Supabase or Neon)
   pool = new Pool({ connectionString: databaseUrl });
   db = drizzle({ client: pool, schema });
-  console.log('Connected to PostgreSQL database');
+  console.log('Connected to PostgreSQL database (Supabase/Neon)');
 } else {
   // Fallback to in-memory database for development
   pool = {
     query: async (text: string, params?: any[]) => {
-      return { rows: inMemoryData.manualTradingBalances || [] };
+      // Parse the query to determine what data to return
+      if (text.includes('strategies')) {
+        return { rows: inMemoryData.strategies || [] };
+      }
+      if (text.includes('live_positions')) {
+        return { rows: inMemoryData.livePositions || [] };
+      }
+      if (text.includes('live_trades')) {
+        return { rows: inMemoryData.liveTrades || [] };
+      }
+      if (text.includes('users')) {
+        return { rows: inMemoryData.users || [] };
+      }
+      return { rows: [] };
     }
   };
 
@@ -80,17 +97,25 @@ if (databaseUrl) {
           where: (condition: any) => ({
             limit: (limit: number) => {
               // Return appropriate data based on table type
-              if (table === 'strategies') return inMemoryData.strategies || [];
-              if (table === 'manualTradingBalances') return inMemoryData.manualTradingBalances || [];
+              if (table.name === 'strategies' || table === 'strategies') return inMemoryData.strategies || [];
+              if (table.name === 'users' || table === 'users') return inMemoryData.users || [];
+              if (table.name === 'livePositions' || table === 'livePositions') return inMemoryData.livePositions || [];
+              if (table.name === 'liveTrades' || table === 'liveTrades') return inMemoryData.liveTrades || [];
               return [];
             },
             execute: () => {
-              if (table === 'strategies') return inMemoryData.strategies || [];
+              if (table.name === 'strategies' || table === 'strategies') return inMemoryData.strategies || [];
+              if (table.name === 'users' || table === 'users') return inMemoryData.users || [];
+              if (table.name === 'livePositions' || table === 'livePositions') return inMemoryData.livePositions || [];
+              if (table.name === 'liveTrades' || table === 'liveTrades') return inMemoryData.liveTrades || [];
               return [];
             }
           }),
           execute: () => {
-            if (table === 'strategies') return inMemoryData.strategies || [];
+            if (table.name === 'strategies' || table === 'strategies') return inMemoryData.strategies || [];
+            if (table.name === 'users' || table === 'users') return inMemoryData.users || [];
+            if (table.name === 'livePositions' || table === 'livePositions') return inMemoryData.livePositions || [];
+            if (table.name === 'liveTrades' || table === 'liveTrades') return inMemoryData.liveTrades || [];
             return [];
           }
         })
@@ -108,9 +133,15 @@ if (databaseUrl) {
           };
           
           // Determine which table to insert into
-          if (table === 'strategies' || !table) {
+          if (table.name === 'strategies' || table === 'strategies') {
             if (!inMemoryData.strategies) inMemoryData.strategies = [];
             inMemoryData.strategies.push(newRecord);
+          } else if (table.name === 'livePositions' || table === 'livePositions') {
+            if (!inMemoryData.livePositions) inMemoryData.livePositions = [];
+            inMemoryData.livePositions.push(newRecord);
+          } else if (table.name === 'liveTrades' || table === 'liveTrades') {
+            if (!inMemoryData.liveTrades) inMemoryData.liveTrades = [];
+            inMemoryData.liveTrades.push(newRecord);
           }
           
           return {
@@ -124,7 +155,18 @@ if (databaseUrl) {
       return {
         set: (values: any) => ({
           where: (condition: any) => ({
-            returning: () => []
+            returning: () => {
+              // Update in-memory data
+              const tableName = table.name || table;
+              if (tableName === 'strategies') {
+                const strategy = inMemoryData.strategies?.find((s: any) => s.id === values.id);
+                if (strategy) {
+                  Object.assign(strategy, values, { updatedAt: new Date() });
+                  return [strategy];
+                }
+              }
+              return [];
+            }
           })
         })
       };
@@ -138,6 +180,24 @@ if (databaseUrl) {
       };
     }
   };
+  
+  console.log('Using in-memory database fallback');
 }
+
+// Raw SQL query function for direct database access
+export const query = async (text: string, params?: any[]) => {
+  try {
+    if (pool.query) {
+      const result = await pool.query(text, params);
+      return result;
+    } else {
+      // Fallback for in-memory
+      return { rows: [] };
+    }
+  } catch (error) {
+    console.error('Database query error:', error);
+    throw error;
+  }
+};
 
 export { db, pool };
