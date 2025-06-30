@@ -1,16 +1,20 @@
 
-import { Pool, neonConfig } from '@neondatabase/serverless';
-import { drizzle } from 'drizzle-orm/neon-serverless';
-import ws from "ws";
+import { createClient } from '@supabase/supabase-js';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import * as schema from "@shared/schema";
 
-neonConfig.webSocketConstructor = ws;
+// Load environment variables
+import dotenv from 'dotenv';
+dotenv.config();
 
-// Database configuration - now supports Supabase
-const databaseUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+// Supabase configuration
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const databaseUrl = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-  console.warn('DATABASE_URL or SUPABASE_DB_URL not set. Please add a PostgreSQL database in Replit Secrets.');
+  console.warn('SUPABASE_DB_URL or DATABASE_URL not set. Please add a PostgreSQL database in Replit Secrets.');
   console.warn('Using in-memory fallback for development.');
 }
 
@@ -60,15 +64,28 @@ const inMemoryData: any = {
   ]
 };
 
+// Create Supabase client for additional features
+let supabase: any = null;
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+}
+
 // Create database connection or fallback
 let db: any;
 let pool: any;
 
 if (databaseUrl) {
-  // Use real PostgreSQL database (Supabase or Neon)
-  pool = new Pool({ connectionString: databaseUrl });
-  db = drizzle({ client: pool, schema });
-  console.log('Connected to PostgreSQL database (Supabase/Neon)');
+  // Use Supabase PostgreSQL database
+  const client = postgres(databaseUrl, {
+    ssl: 'require',
+    max: 20,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
+  
+  db = drizzle(client, { schema });
+  pool = client;
+  console.log('Connected to Supabase PostgreSQL database');
 } else {
   // Fallback to in-memory database for development
   pool = {
@@ -187,7 +204,12 @@ if (databaseUrl) {
 // Raw SQL query function for direct database access
 export const query = async (text: string, params?: any[]) => {
   try {
-    if (pool.query) {
+    if (pool && typeof pool === 'function') {
+      // postgres-js client
+      const result = await pool.unsafe(text, params || []);
+      return { rows: result };
+    } else if (pool && pool.query) {
+      // Traditional pool query
       const result = await pool.query(text, params);
       return result;
     } else {
@@ -200,4 +222,4 @@ export const query = async (text: string, params?: any[]) => {
   }
 };
 
-export { db, pool };
+export { db, pool, supabase };

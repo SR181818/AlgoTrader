@@ -13,34 +13,33 @@ Follow these steps to set up Supabase as your database for the trading platform:
    - **Region**: Choose closest to your location
 4. Click "Create new project"
 
-## Step 2: Get Database Connection String
+## Step 2: Configure Environment Variables
 
 1. In your Supabase project dashboard, go to **Settings** → **Database**
 2. Scroll down to **Connection string** section
-3. Select **URI** tab
-4. Copy the connection string (it looks like: `postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-ID].supabase.co:5432/postgres`)
-5. Replace `[YOUR-PASSWORD]` with the password you created
+3. Select **URI** tab and copy the connection string
+4. Replace `[YOUR-PASSWORD]` with your actual database password
+5. Update the `.env` file in your project root:
 
-## Step 3: Add to Replit Secrets
+```env
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_DB_URL=postgresql://postgres:your-password@db.your-project-id.supabase.co:5432/postgres
+DATABASE_URL=${SUPABASE_DB_URL}
+```
 
-1. In your Replit project, click the **Secrets** tab (🔐 icon)
-2. Add a new secret:
-   - **Key**: `SUPABASE_DB_URL`
-   - **Value**: Your complete connection string from step 2
-3. Click **Add Secret**
-
-## Step 4: Set Up Database Schema
+## Step 3: Set Up Database Schema
 
 1. In Supabase dashboard, go to **SQL Editor**
 2. Copy the contents of `supabase-schema.sql` from your project
 3. Paste it into the SQL editor and click **Run**
 4. This will create all necessary tables for your trading platform
 
-## Step 5: Restart Your Application
+## Step 4: Install Dependencies and Restart
 
-1. In Replit, click the **Run** button to restart your application
-2. Check the console - you should see "Connected to PostgreSQL database (Supabase/Neon)"
-3. Your application is now using Supabase!
+1. Run: `npm install @supabase/supabase-js postgres dotenv`
+2. Update your `.env` file with your actual Supabase credentials
+3. Restart your application
 
 ## Features Enabled
 
@@ -51,6 +50,7 @@ With Supabase configured, you now have:
 ✅ **API Key Management** - Encrypted storage of Binance API keys
 ✅ **Trade History** - Complete trading audit trail
 ✅ **User Management** - Multi-user support
+✅ **Real-time Subscriptions** - Live data updates via Supabase Realtime
 
 ## Testing
 
@@ -62,9 +62,9 @@ With Supabase configured, you now have:
 
 ## Troubleshooting
 
-- If you see "DATABASE_URL not set" in console, check your Secrets configuration
-- Make sure the connection string includes the correct password
-- Verify the SQL schema was executed without errors in Supabase
-- Check Supabase logs in dashboard if connection fails
+- Make sure your `.env` file has the correct Supabase credentials
+- Verify the database password is correct in SUPABASE_DB_URL
+- Check that the SQL schema was executed without errors in Supabase
+- Restart the application after updating environment variables
 
-Your trading platform is now fully integrated with Supabase! 🚀
+Your trading platform is now fully integrated with Supabase!
