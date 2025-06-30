@@ -12,9 +12,8 @@ AlgoTrader is a cutting-edge, end-to-end modular trading platform designed to em
 
 Get a deeper dive into AlgoTrader's vision, architecture, and market opportunity.
 
-[![View Pitch Deck](https://img.shields.io/badge/View%20Pitch%20Deck-PDF-red?style=for-the-badge&logo=googledocs)](link-to-your-pitch-deck.pdf)
+[![View Pitch Deck](https://img.shields.io/badge/View%20Pitch%20Deck-PDF-red?style=for-the-badge&logo=googledocs)](https://github.com/DEEPML1818/AlgoTrader/blob/main/AlgoTrader_%20The%20Future%20of%20Algorithmic%20Trading.pdf)
 
-**Note:** Please replace `link-to-your-pitch-deck.pdf` with the actual URL to your pitch deck PDF or presentation.
 
 ---
 
