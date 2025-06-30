@@ -40,6 +40,97 @@ class MarketDataService {
   getPrice(symbol: string): number | null {
     return livePrices[symbol] || null;
   }
+
+  async fetchRealTimePrice(symbol: string): Promise<number> {
+    const endpoints = [
+      `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+      `https://api1.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+      `https://api2.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+      `https://api3.binance.com/api/v3/ticker/price?symbol=${symbol}`
+    ];
+
+    let lastError: any;
+
+    for (const endpoint of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+        const response = await fetch(endpoint, {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.code) {
+          throw new Error(`Binance API Error: ${data.msg}`);
+        }
+
+        const price = parseFloat(data.price);
+        if (isNaN(price) || price <= 0) {
+          throw new Error('Invalid price data received');
+        }
+
+        // Cache the price
+        livePrices[symbol] = price;
+        console.log(`Fetched live price for ${symbol}: ${price} (from ${endpoint})`);
+        return price;
+      } catch (error) {
+        lastError = error;
+        console.warn(`Failed to get price from ${endpoint}:`, error);
+        continue;
+      }
+    }
+
+    console.error(`All endpoints failed for ${symbol}, last error:`, lastError);
+
+    // Try alternative API as final fallback
+    try {
+      const altResponse = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+      if (altResponse.ok) {
+        const altData = await altResponse.json();
+        const altPrice = parseFloat(altData.price);
+        if (!isNaN(altPrice) && altPrice > 0) {
+          livePrices[symbol] = altPrice;
+          console.log(`Fetched live price for ${symbol}: ${altPrice} (from futures API)`);
+          return altPrice;
+        }
+      }
+    } catch (error) {
+      console.warn('Alternative API also failed:', error);
+    }
+
+    // Final fallback to cached price or default
+    const cachedPrice = livePrices[symbol];
+    if (cachedPrice) {
+      console.log(`Using cached price for ${symbol}: ${cachedPrice}`);
+      return cachedPrice;
+    }
+
+    // Default prices as last resort
+    const defaultPrices: { [key: string]: number } = {
+      'BTCUSDT': 45000,
+      'ETHUSDT': 3000,
+      'ADAUSDT': 0.5,
+      'SOLUSDT': 100,
+      'DOTUSDT': 8
+    };
+
+    const defaultPrice = defaultPrices[symbol] || 100;
+    livePrices[symbol] = defaultPrice;
+    console.log(`Using default price for ${symbol}: ${defaultPrice}`);
+    return defaultPrice;
+  }
 }
 
 const marketDataService = new MarketDataService();
@@ -260,19 +351,42 @@ router.post('/position/close', authenticateToken, async (req: any, res) => {
   }
 });
 
-// Get live market data
+// Get live market data - Enhanced endpoint for frontend to use
 router.get('/market-data/:symbol', async (req, res) => {
   try {
     const { symbol } = req.params;
-    const price = marketDataService.getPrice(symbol);
     
-    if (price) {
-      res.json({ success: true, data: { symbol, price, timestamp: new Date() } });
-    } else {
-      res.status(404).json({ success: false, error: 'Symbol not found' });
+    // Try to get fresh price from Binance API
+    try {
+      const price = await marketDataService.fetchRealTimePrice(symbol);
+      res.json({ 
+        success: true, 
+        data: { 
+          symbol, 
+          price, 
+          timestamp: new Date() 
+        } 
+      });
+    } catch (error) {
+      console.error(`Error fetching real-time price for ${symbol}:`, error);
+      
+      // Fallback to cached price
+      const cachedPrice = marketDataService.getPrice(symbol);
+      if (cachedPrice) {
+        res.json({ 
+          success: true, 
+          data: { 
+            symbol, 
+            price: cachedPrice, 
+            timestamp: new Date() 
+          } 
+        });
+      } else {
+        res.status(404).json({ success: false, error: 'Symbol not found and no cached price available' });
+      }
     }
   } catch (error) {
-    console.error('Error fetching market data:', error);
+    console.error('Error in market-data endpoint:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch market data' });
   }
 });

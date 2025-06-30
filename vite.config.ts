@@ -6,6 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
+  root: './client',
   define: {
     global: 'globalThis',
   },
@@ -16,7 +17,7 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: ['talib'],
+      external: ['talib', 'ccxt'],
     },
   },
   server: {
