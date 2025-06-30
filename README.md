@@ -68,7 +68,7 @@ Follow these steps to set up and run AlgoTrader locally.
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/DEEPML1818/AlgoTrader.git
-    cd your-project
+    cd AlgoTrader
     ```
 2.  **Install dependencies:**
     ```bash
