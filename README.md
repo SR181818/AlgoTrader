@@ -124,7 +124,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-For any questions or inquiries, please open an issue on GitHub or contact us at [your-email@example.com](mailto:deepml1818@gmail.com).
+For any questions or inquiries, please open an issue on GitHub or contact us at [deepml1818@gmail.com](mailto:deepml1818@gmail.com).
 
 ---
 
