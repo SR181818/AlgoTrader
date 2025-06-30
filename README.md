@@ -67,7 +67,7 @@ Follow these steps to set up and run AlgoTrader locally.
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-repo/your-project.git
+    git clone https://github.com/DEEPML1818/AlgoTrader.git
     cd your-project
     ```
 2.  **Install dependencies:**
@@ -124,7 +124,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-For any questions or inquiries, please open an issue on GitHub or contact us at [your-email@example.com](mailto:your-email@example.com).
+For any questions or inquiries, please open an issue on GitHub or contact us at [your-email@example.com](mailto:deepml1818@gmail.com).
 
 ---
 
