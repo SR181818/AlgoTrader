@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react() , netlify()],
   root: './client',
   define: {
     global: 'globalThis',
