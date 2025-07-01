@@ -14,6 +14,7 @@ Get a deeper dive into AlgoTrader's vision, architecture, and market opportunity
 
 [![View Pitch Deck](https://img.shields.io/badge/View%20Pitch%20Deck-PDF-red?style=for-the-badge&logo=googledocs)](https://github.com/DEEPML1818/AlgoTrader/blob/main/AlgoTrader_%20The%20Future%20of%20Algorithmic%20Trading.pdf)
 
+[![Netlify Status](https://api.netlify.com/api/v1/badges/5feb8444-0bb9-423f-9a6b-a4c0a1646bfb/deploy-status)](https://app.netlify.com/projects/algotrader-1/deploys)
 
 ---
 
