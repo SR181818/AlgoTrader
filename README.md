@@ -3,6 +3,7 @@
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen)](https://github.com/your-repo/your-project/actions)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Technologies](https://img.shields.io/badge/Tech-React%2C%20Node.js%2C%20PostgreSQL%2C%20Algorand%2C%20Stripe-blueviolet)](https://github.com/your-repo/your-project)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/5feb8444-0bb9-423f-9a6b-a4c0a1646bfb/deploy-status)](https://app.netlify.com/projects/algotrader-1/deploys)
 
 AlgoTrader is a cutting-edge, end-to-end modular trading platform designed to empower traders with advanced algorithmic capabilities, robust risk management, and a secure, extensible plugin ecosystem. Built with TypeScript, React (Vite), and Node.js, AlgoTrader provides a comprehensive environment for developing, backtesting, deploying, and monitoring automated trading strategies.
 
@@ -14,7 +15,6 @@ Get a deeper dive into AlgoTrader's vision, architecture, and market opportunity
 
 [![View Pitch Deck](https://img.shields.io/badge/View%20Pitch%20Deck-PDF-red?style=for-the-badge&logo=googledocs)](https://github.com/DEEPML1818/AlgoTrader/blob/main/AlgoTrader_%20The%20Future%20of%20Algorithmic%20Trading.pdf)
 
-[![Netlify Status](https://api.netlify.com/api/v1/badges/5feb8444-0bb9-423f-9a6b-a4c0a1646bfb/deploy-status)](https://app.netlify.com/projects/algotrader-1/deploys)
 
 ---
 
