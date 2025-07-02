@@ -11,7 +11,7 @@
     "db:push": "drizzle-kit push"
   },
   "engines": {
-    "node": "18"
+    "node": "21"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
