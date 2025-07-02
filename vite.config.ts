@@ -1,7 +1,5 @@
-
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
@@ -23,9 +21,10 @@ export default defineConfig({
   server: {
     port: 3000,
     host: '0.0.0.0',
+    allowedHosts: ['algotrader-lngk.onrender.com'], // ✅ Allow your backend domain
     proxy: {
       '/api': {
-        target: 'http://0.0.0.0:5000',
+        target: 'https://algotrader-lngk.onrender.com', // ✅ Use live backend during dev
         changeOrigin: true,
         secure: false,
       },
