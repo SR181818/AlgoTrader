@@ -4,9 +4,10 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "node --max-old-space-size=256 tsx server/index.ts",
+    "dev": "node --max-old-space-size=256 --max-semi-space-size=8 node_modules/.bin/tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "node --max-old-space-size=256 dist/index.js",
+    "start": "node --max-old-space-size=256 --max-semi-space-size=8 dist/index.js",
+    "vite": "node --max-old-space-size=256 --max-semi-space-size=8 node_modules/.bin/vite",
     "check": "tsc",
     "db:push": "drizzle-kit push"
   },
