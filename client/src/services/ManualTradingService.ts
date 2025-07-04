@@ -585,60 +585,77 @@ class ManualTradingService {
     }
   }
 
-  // Get real-time price from backend API instead of directly from Binance
+  // Get real-time price from Binance API with multiple fallbacks
   async getRealTimePrice(symbol: string): Promise<number> {
-    try {
-      const response = await fetch(`/api/live-trading/market-data/${symbol}`, {
-        headers: {
-          'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
+    const endpoints = [
+      `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+      `https://api1.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+      `https://api2.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+      `https://api3.binance.com/api/v3/ticker/price?symbol=${symbol}`
+    ];
+
+    let lastError: any;
+
+    for (const endpoint of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+        const response = await fetch(endpoint, {
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+
+        if (data.code) {
+          throw new Error(`Binance API Error: ${data.msg}`);
+        }
+
+        const price = parseFloat(data.price);
+        if (isNaN(price) || price <= 0) {
+          throw new Error('Invalid price data received');
+        }
+
+        console.log(`Live price for ${symbol}: ${price} (from ${endpoint})`);
+        return price;
+      } catch (error) {
+        lastError = error;
+        console.warn(`Failed to get price from ${endpoint}:`, error);
+        continue;
       }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(`API Error: ${data.error || 'Unknown error'}`);
-      }
-
-      const price = data.data.price;
-      if (isNaN(price) || price <= 0) {
-        throw new Error('Invalid price data received');
-      }
-
-      console.log(`Live price for ${symbol}: ${price} (from backend API)`);
-      return price;
-    } catch (error) {
-      console.error(`Failed to get price for ${symbol} from backend:`, error);
-      
-      // Fallback to simulated price if backend fails
-      const lastKnown = this.realTimePrices.get(symbol);
-      if (lastKnown) {
-        const simulatedPrice = lastKnown.price * (0.999 + Math.random() * 0.002); // Small random movement
-        console.log(`Using simulated price for ${symbol}: ${simulatedPrice}`);
-        return simulatedPrice;
-      }
-      
-      // Final fallback with default prices
-      const defaultPrices: { [key: string]: number } = {
-        'BTCUSDT': 45000,
-        'ETHUSDT': 3000,
-        'ADAUSDT': 0.5,
-        'SOLUSDT': 100,
-        'DOTUSDT': 8
-      };
-      
-      const fallbackPrice = defaultPrices[symbol] || 100;
-      console.log(`Using fallback price for ${symbol}: ${fallbackPrice}`);
-      return fallbackPrice;
     }
+
+    console.error(`All endpoints failed for ${symbol}, last error:`, lastError);
+
+    // Try alternative API as final fallback
+    try {
+      const altResponse = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+      if (altResponse.ok) {
+        const altData = await altResponse.json();
+        const altPrice = parseFloat(altData.price);
+        if (!isNaN(altPrice) && altPrice > 0) {
+          console.log(`Live price for ${symbol}: ${altPrice} (from futures API)`);
+          return altPrice;
+        }
+      }
+    } catch (error) {
+      console.warn('Alternative API also failed:', error);
+    }
+
+    throw new Error(`Unable to get real-time price for ${symbol} from any source`);
   }
 
-  // Enhanced real-time ticker data with retry logic - now uses backend API
+  // Enhanced real-time ticker data with retry logic
   async getRealTimeTicker(symbol: string, retries: number = 3): Promise<{
     symbol: string;
     price: number;
@@ -648,35 +665,55 @@ class ManualTradingService {
     high: number;
     low: number;
   }> {
-    try {
-      const price = await this.getRealTimePrice(symbol);
-      
-      // For now, return basic ticker data with the price from backend
-      // In a real implementation, you'd extend the backend API to return full ticker data
-      return {
-        symbol,
-        price,
-        change: 0,
-        changePercent: 0,
-        volume: 10000,
-        high: price * 1.05,
-        low: price * 0.95
-      };
-    } catch (error) {
-      console.error(`Failed to get ticker for ${symbol}:`, error);
-      
-      // Fallback ticker data
-      const fallbackPrice = await this.getRealTimePrice(symbol);
-      return {
-        symbol,
-        price: fallbackPrice,
-        change: 0,
-        changePercent: 0,
-        volume: 10000,
-        high: fallbackPrice * 1.05,
-        low: fallbackPrice * 0.95
-      };
+    let lastError;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.code) {
+          throw new Error(`Binance API Error: ${data.msg}`);
+        }
+
+        return {
+          symbol: data.symbol,
+          price: parseFloat(data.lastPrice),
+          change: parseFloat(data.priceChange),
+          changePercent: parseFloat(data.priceChangePercent),
+          volume: parseFloat(data.volume),
+          high: parseFloat(data.highPrice),
+          low: parseFloat(data.lowPrice)
+        };
+      } catch (error) {
+        lastError = error;
+        console.warn(`Attempt ${attempt} failed for ${symbol}:`, error);
+
+        if (attempt < retries) {
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        }
+      }
     }
+
+    // If all retries failed, return fallback data
+    console.error(`All attempts failed for ${symbol}, using fallback data`);
+    const fallbackPrice = await this.getRealTimePrice(symbol);
+
+    return {
+      symbol,
+      price: fallbackPrice,
+      change: 0,
+      changePercent: 0,
+      volume: 10000,
+      high: fallbackPrice * 1.05,
+      low: fallbackPrice * 0.95
+    };
   }
 
   // Get order book data
