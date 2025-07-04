@@ -428,7 +428,7 @@ export function StrategyBuilder({ strategy, onStrategyChange, onTestStrategy, is
                             <option value="OR">OR</option>
                           </select>
                         )}
-                        
+
                         <select
                           value={condition.indicator}
                           onChange={(e) => updateCondition(rule.id, index, { indicator: e.target.value })}
@@ -496,7 +496,7 @@ export function StrategyBuilder({ strategy, onStrategyChange, onTestStrategy, is
         {activeTab === 'risk' && (
           <div className="space-y-6">
             <h3 className="text-lg font-semibold text-white">Risk Management</h3>
-            
+
             <div className="grid grid-cols-2 gap-6">
               <div className="bg-gray-700 rounded-lg p-4">
                 <h4 className="font-medium text-white mb-4">Position Management</h4>

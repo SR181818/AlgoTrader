@@ -9,6 +9,7 @@ import BacktestPage from './pages/BacktestPage';
 import ManualTradingPage from './pages/ManualTradingPage';
 import PortfolioDashboardPage from './pages/PortfolioDashboardPage';
 import IndicatorLibraryPage from './pages/IndicatorLibraryPage';
+import AIFeaturesPage from './pages/AIFeaturesPage';
 import SettingsPage from './pages/SettingsPage';
 import BlockchainPaywallPage from './pages/BlockchainPaywallPage';
 import LandingPage from './pages/LandingPage';
@@ -186,6 +187,12 @@ function AppContent() {
         <Route path="/live-dashboard">
           <ProtectedRoute>
             <LiveTradingDashboardPage />
+          </ProtectedRoute>
+        </Route>
+
+        <Route path="/ai">
+          <ProtectedRoute>
+            <AIFeaturesPage />
           </ProtectedRoute>
         </Route>
 

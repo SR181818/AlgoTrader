@@ -43,92 +43,16 @@ function initializeExchange(apiKey?: string, apiSecret?: string) {
   return exchange;
 }
 
+// Import the backtest controller
+import { BacktestController } from './controllers/backtest';
+
+const backtestController = new BacktestController();
+
 // Backtest endpoint with real market data
-router.post('/backtest', authenticateToken, async (req: any, res: Response) => {
-  try {
-    const { symbol, timeframe, startDate, endDate, strategyName, strategyConfig } = 
-      backtestSchema.parse(req.body);
+router.post('/backtest', authenticateToken, backtestController.runBacktest.bind(backtestController));
 
-    // Initialize exchange for data fetching
-    const exchange = initializeExchange();
-
-    // Convert dates to timestamps
-    const since = new Date(startDate).getTime();
-    const until = new Date(endDate).getTime();
-
-    // Fetch historical OHLCV data
-    console.log(`Fetching historical data for ${symbol} from ${startDate} to ${endDate}`);
-
-    let allCandles: any[] = [];
-    let currentSince = since;
-    const limit = 1000; // Max candles per request
-
-    while (currentSince < until) {
-      try {
-        const candles = await exchange.fetchOHLCV(symbol, timeframe, currentSince, limit);
-        if (candles.length === 0) break;
-
-        allCandles = allCandles.concat(candles);
-        currentSince = candles[candles.length - 1][0] + 1;
-
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100));
-      } catch (error) {
-        console.error('Error fetching OHLCV:', error);
-        break;
-      }
-    }
-
-    // Filter candles within date range and normalize format
-    const normalizedCandles = allCandles
-      .filter(candle => candle[0] >= since && candle[0] <= until)
-      .map(candle => ({
-        timestamp: candle[0],
-        open: candle[1],
-        high: candle[2],
-        low: candle[3],
-        close: candle[4],
-        volume: candle[5],
-      }));
-
-    if (normalizedCandles.length === 0) {
-      return res.status(400).json({ error: 'No historical data available for the specified period' });
-    }
-
-    // Run backtest simulation
-    const backtestResults = await runBacktest(normalizedCandles, strategyConfig);
-
-    // Save backtest to database
-    const [savedBacktest] = await db
-      .insert(backtests)
-      .values({
-        userId: req.user.userId,
-        strategyName,
-        symbol,
-        timeframe,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        totalReturn: backtestResults.totalReturn.toString(),
-        sharpeRatio: backtestResults.sharpeRatio.toString(),
-        maxDrawdown: backtestResults.maxDrawdown.toString(),
-        winRate: backtestResults.winRate.toString(),
-        results: JSON.stringify(backtestResults),
-      })
-      .returning();
-
-    res.json({
-      backtestId: savedBacktest.id,
-      symbol,
-      timeframe,
-      candleCount: normalizedCandles.length,
-      results: backtestResults,
-    });
-
-  } catch (error) {
-    console.error('Backtest error:', error);
-    res.status(500).json({ error: 'Backtest failed', details: error.message });
-  }
-});
+// Get available symbols endpoint
+router.get('/symbols', authenticateToken, backtestController.getAvailableSymbols.bind(backtestController));
 
 // Manual trade execution
 router.post('/trade', authenticateToken, async (req: any, res: Response) => {

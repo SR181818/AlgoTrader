@@ -11,6 +11,8 @@ export const users = pgTable("users", {
   binanceApiKey: text("binance_api_key"),
   binanceApiSecret: text("binance_api_secret"),
   isPaidUser: boolean("is_paid_user").notNull().default(false),
+  aiEnabled: boolean("ai_enabled").notNull().default(false),
+  portfolioData: text("portfolio_data"), // JSON string
   loginType: text("login_type").notNull().default("traditional"), // 'traditional' or 'algorand'
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -134,6 +136,20 @@ export const backtests = pgTable("backtests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const userPortfolios = pgTable("user_portfolios", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  portfolioConfig: text("portfolio_config"), // JSON string with complete portfolio state
+  totalValue: numeric("total_value", { precision: 18, scale: 8 }).default("0"),
+  totalPnL: numeric("total_pnl", { precision: 18, scale: 8 }).default("0"),
+  totalPnLPercent: numeric("total_pnl_percent", { precision: 10, scale: 4 }).default("0"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const strategies = pgTable("strategies", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").references(() => users.id).notNull(),
@@ -148,6 +164,7 @@ export const strategies = pgTable("strategies", {
   maxPositions: integer("max_positions").default(1),
   entryConditions: text("entry_conditions"), // JSON string
   exitConditions: text("exit_conditions"), // JSON string
+  strategyConfig: text("strategy_config"), // Complete strategy configuration JSON
   isActive: boolean("is_active").default(false),
   totalTrades: integer("total_trades").default(0),
   winRate: numeric("win_rate", { precision: 10, scale: 4 }).default("0"),
@@ -189,6 +206,19 @@ export const liveTrades = pgTable('live_trades', {
   executedAt: timestamp('executed_at').defaultNow().notNull(),
 });
 
+export const algorandPayments = pgTable("algorand_payments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  transactionId: text("transaction_id").unique().notNull(),
+  algorandAddress: text("algorand_address").notNull(),
+  amount: numeric("amount", { precision: 18, scale: 8 }).notNull(),
+  planType: text("plan_type").notNull(), // 'ai'
+  status: text("status").notNull().default("pending"), // 'pending' | 'confirmed' | 'failed'
+  blockHeight: integer("block_height"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  confirmedAt: timestamp("confirmed_at"),
+});
+
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -225,7 +255,17 @@ export const selectBacktestSchema = createSelectSchema(backtests);
 export type InsertBacktest = z.infer<typeof insertBacktestSchema>;
 export type Backtest = z.infer<typeof selectBacktestSchema>;
 
+export const insertUserPortfolioSchema = createInsertSchema(userPortfolios);
+export const selectUserPortfolioSchema = createSelectSchema(userPortfolios);
+export type InsertUserPortfolio = z.infer<typeof insertUserPortfolioSchema>;
+export type UserPortfolio = z.infer<typeof selectUserPortfolioSchema>;
+
 export const insertStrategySchema = createInsertSchema(strategies);
 export const selectStrategySchema = createSelectSchema(strategies);
 export type InsertStrategy = z.infer<typeof insertStrategySchema>;
 export type Strategy = z.infer<typeof selectStrategySchema>;
+
+export const insertAlgorandPaymentSchema = createInsertSchema(algorandPayments);
+export const selectAlgorandPaymentSchema = createSelectSchema(algorandPayments);
+export type InsertAlgorandPayment = z.infer<typeof insertAlgorandPaymentSchema>;
+export type AlgorandPayment = z.infer<typeof selectAlgorandPaymentSchema>;

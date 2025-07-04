@@ -13,6 +13,10 @@ import { TradingBot } from './TradingBot';
 import { TradingBotConfig } from '../services/TradingBotService';
 import { Play, Pause, Square, BarChart3, Settings, TestTube, AlertTriangle, Zap } from 'lucide-react';
 import { useMetrics } from '../monitoring/MetricsProvider';
+import { TrendingUp, History, Target, Briefcase, Brain, Lock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '../auth/AuthProvider';
 
 interface TradingDashboardProps {
   symbol: string;
@@ -63,6 +67,9 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
   const [manualTrades, setManualTrades] = useState<Trade[]>([]);
   const [livePnL, setLivePnL] = useState(0);
   const [currentPrice, setCurrentPrice] = useState(0);
+  const [activeTab, setActiveTab] = useState('live-trading');
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const { isConnected, connectedAccount } = useAuth();
 
   // Trading bot configuration
   const tradingBotConfig: TradingBotConfig = {
@@ -84,6 +91,30 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
     recordCandleData, 
     setSystemHealth 
   } = useMetrics();
+
+  useEffect(() => {
+    checkAIStatus();
+  }, []);
+
+  const checkAIStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('/api/paywall/status', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAiEnabled(data.aiEnabled);
+      }
+    } catch (error) {
+      console.error('Failed to check AI status:', error);
+    }
+  };
 
   // Subscribe to live data for selected symbol and timeframe
   useEffect(() => {
@@ -528,224 +559,322 @@ export function TradingDashboard({ symbol, timeframe }: TradingDashboardProps) {
 
   return (
     <div className="space-y-6">
-      {/* Control Panel */}
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-white">Trading Control Panel</h2>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors"
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
+        <TabsList className="bg-gray-800 border border-gray-700 rounded-lg p-2">
+          <TabsTrigger value="live-trading" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
+            <TrendingUp className="w-4 h-4 mr-2" />
+            Live Trading
+          </TabsTrigger>
+          <TabsTrigger value="backtest" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
+            <History className="w-4 h-4 mr-2" />
+            Backtest
+          </TabsTrigger>
+          <TabsTrigger value="strategy-optimizer" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
+            <Target className="w-4 h-4 mr-2" />
+            Optimizer
+          </TabsTrigger>
+          <TabsTrigger value="portfolio" className="data-[state=active]:bg-cyan-600 data-[state=active]:text-white">
+            <Briefcase className="w-4 h-4 mr-2" />
+            Portfolio
+          </TabsTrigger>
+            <TabsTrigger 
+              value="ai" 
+              className={`data-[state=active]:bg-cyan-600 data-[state=active]:text-white ${!aiEnabled ? 'opacity-60' : ''}`}
+              disabled={!aiEnabled}
+              title={!aiEnabled ? "Upgrade for AI features" : "AI Trading Features"}
             >
-              <Settings size={16} className="mr-2" />
-              Settings
-            </button>
-          </div>
-        </div>
+              {aiEnabled ? (
+                <Brain className="w-4 h-4 mr-2" />
+              ) : (
+                <Lock className="w-4 h-4 mr-2" />
+              )}
+              AI {!aiEnabled && '🔒'}
+            </TabsTrigger>
+        </TabsList>
 
-        <div className="flex items-center space-x-4">
-          {!isLiveTrading ? (
-            <button
-              onClick={startLiveTrading}
-              className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white transition-colors"
-            >
-              <Play size={16} className="mr-2" />
-              Start Live Trading
-            </button>
-          ) : (
-            <button
-              onClick={stopLiveTrading}
-              className="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition-colors"
-            >
-              <Square size={16} className="mr-2" />
-              Stop Trading
-            </button>
-          )}
-
-          <div className={`px-3 py-2 rounded-lg text-sm font-medium ${
-            isLiveTrading ? 'bg-green-600/20 text-green-400' : 'bg-gray-600/20 text-gray-400'
-          }`}>
-            {isLiveTrading ? 'LIVE' : 'STOPPED'}
-          </div>
-
-          <div className="text-sm text-gray-400">
-            Symbol: <span className="text-white font-mono">{symbol}</span>
-          </div>
-          <div className="text-sm text-gray-400">
-            Timeframe: <span className="text-white font-mono">{timeframe}</span>
-          </div>
-
-          <button
-            onClick={() => setShowTradingBot(!showTradingBot)}
-            className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors ml-auto"
-          >
-            <Zap size={16} className="mr-2" />
-            {showTradingBot ? 'Hide Trading Bot' : 'Show Trading Bot'}
-          </button>
-        </div>
-
-        {/* Manual Order Form */}
-        <div className="mt-4 pt-4 border-t border-gray-700">
-          <h3 className="text-lg font-semibold text-white mb-3">Manual Order Execution</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm text-gray-300 mb-1">Amount ({symbol.split('/')[0]})</label>
-              <input
-                type="number"
-                step="0.001"
-                min="0.001"
-                value={manualOrderAmount}
-                onChange={(e) => setManualOrderAmount(parseFloat(e.target.value))}
-                className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-300 mb-1">Side</label>
-              <select
-                value={manualOrderSide}
-                onChange={(e) => setManualOrderSide(e.target.value as 'buy' | 'sell')}
-                className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
-              >
-                <option value="buy">Buy</option>
-                <option value="sell">Sell</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-300 mb-1">Market Price</label>
-              <div className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600">
-                {marketData ? `$${marketData.price.toLocaleString()}` : 'Loading...'}
+        <TabsContent value="live-trading" className="mt-6">
+          {/* Control Panel */}
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-white">Trading Control Panel</h2>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="flex items-center px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors"
+                >
+                  <Settings size={16} className="mr-2" />
+                  Settings
+                </button>
               </div>
             </div>
-            <div className="flex items-end">
+
+            <div className="flex items-center space-x-4">
+              {!isLiveTrading ? (
+                <button
+                  onClick={startLiveTrading}
+                  className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white transition-colors"
+                >
+                  <Play size={16} className="mr-2" />
+                  Start Live Trading
+                </button>
+              ) : (
+                <button
+                  onClick={stopLiveTrading}
+                  className="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition-colors"
+                >
+                  <Square size={16} className="mr-2" />
+                  Stop Trading
+                </button>
+              )}
+
+              <div className={`px-3 py-2 rounded-lg text-sm font-medium ${
+                isLiveTrading ? 'bg-green-600/20 text-green-400' : 'bg-gray-600/20 text-gray-400'
+              }`}>
+                {isLiveTrading ? 'LIVE' : 'STOPPED'}
+              </div>
+
+              <div className="text-sm text-gray-400">
+                Symbol: <span className="text-white font-mono">{symbol}</span>
+              </div>
+              <div className="text-sm text-gray-400">
+                Timeframe: <span className="text-white font-mono">{timeframe}</span>
+              </div>
+
               <button
-                onClick={handleManualOrder}
-                disabled={isExecutingOrder || !marketData}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg text-white transition-colors"
+                onClick={() => setShowTradingBot(!showTradingBot)}
+                className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors ml-auto"
               >
-                {isExecutingOrder ? 'Executing...' : 'Execute Order'}
+                <Zap size={16} className="mr-2" />
+                {showTradingBot ? 'Hide Trading Bot' : 'Show Trading Bot'}
               </button>
             </div>
-          </div>
-        </div>
 
-        {error && (
-          <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-start">
-            <AlertTriangle className="text-red-400 mt-0.5 mr-3 flex-shrink-0" size={18} />
-            <span className="text-red-300 text-sm">{error}</span>
-          </div>
-        )}
-      </div>
+            {/* Manual Order Form */}
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <h3 className="text-lg font-semibold text-white mb-3">Manual Order Execution</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Amount ({symbol.split('/')[0]})</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    min="0.001"
+                    value={manualOrderAmount}
+                    onChange={(e) => setManualOrderAmount(parseFloat(e.target.value))}
+                    className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Side</label>
+                  <select
+                    value={manualOrderSide}
+                    onChange={(e) => setManualOrderSide(e.target.value as 'buy' | 'sell')}
+                    className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600"
+                  >
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-300 mb-1">Market Price</label>
+                  <div className="w-full bg-gray-700 text-white rounded px-3 py-2 border border-gray-600">
+                    {marketData ? `$${marketData.price.toLocaleString()}` : 'Loading...'}
+                  </div>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleManualOrder}
+                    disabled={isExecutingOrder || !marketData}
+                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg text-white transition-colors"
+                  >
+                    {isExecutingOrder ? 'Executing...' : 'Execute Order'}
+                  </button>
+                </div>
+              </div>
+            </div>
 
-      {/* Trading Bot */}
-      {showTradingBot && (
-        <TradingBot 
-          initialConfig={tradingBotConfig}
-          onSignalProcessed={(signal, order) => {
-            console.log('Signal processed:', signal, 'Order:', order);
-          }}
-        />
-      )}
-
-      {/* Dashboard Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* P&L and Positions */}
-        <div className="xl:col-span-2 space-y-6">
-          {/* PnL Gauge */}
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <PnLGauge 
-              totalPnL={livePnL > 0 ? livePnL : totalPnL}
-              dailyPnL={dailyPnL}
-              accountBalance={accountBalance}
-            />
-            {currentPrice > 0 && (
-              <div className="mt-4 text-sm text-gray-400">
-                <div>Current Price: ${currentPrice.toFixed(2)}</div>
-                <div>Live P&L: <span className={livePnL >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  ${livePnL.toFixed(2)}
-                </span></div>
+            {error && (
+              <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-start">
+                <AlertTriangle className="text-red-400 mt-0.5 mr-3 flex-shrink-0" size={18} />
+                <span className="text-red-300 text-sm">{error}</span>
               </div>
             )}
           </div>
 
-          <OpenPositionsTable 
-            positions={positions}
-            onClosePosition={handleClosePosition}
-          />
+          {/* Trading Bot */}
+          {showTradingBot && (
+            <TradingBot 
+              initialConfig={tradingBotConfig}
+              onSignalProcessed={(signal, order) => {
+                console.log('Signal processed:', signal, 'Order:', order);
+              }}
+            />
+          )}
 
-          {/* Orders Table */}
-          <div className="bg-gray-800 rounded-lg border border-gray-700">
-            <div className="p-4 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-white">Recent Orders</h3>
-              <div className="text-sm text-gray-400 mt-1">
-                {orders.length} order{orders.length !== 1 ? 's' : ''}
+          {/* Dashboard Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            {/* P&L and Positions */}
+            <div className="xl:col-span-2 space-y-6">
+              {/* PnL Gauge */}
+              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <PnLGauge 
+                  totalPnL={livePnL > 0 ? livePnL : totalPnL}
+                  dailyPnL={dailyPnL}
+                  accountBalance={accountBalance}
+                />
+                {currentPrice > 0 && (
+                  <div className="mt-4 text-sm text-gray-400">
+                    <div>Current Price: ${currentPrice.toFixed(2)}</div>
+                    <div>Live P&L: <span className={livePnL >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      ${livePnL.toFixed(2)}
+                    </span></div>
+                  </div>
+                )}
+              </div>
+
+              <OpenPositionsTable 
+                positions={positions}
+                onClosePosition={handleClosePosition}
+              />
+
+              {/* Orders Table */}
+              <div className="bg-gray-800 rounded-lg border border-gray-700">
+                <div className="p-4 border-b border-gray-700">
+                  <h3 className="text-lg font-semibold text-white">Recent Orders</h3>
+                  <div className="text-sm text-gray-400 mt-1">
+                    {orders.length} order{orders.length !== 1 ? 's' : ''}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  {orders.length === 0 ? (
+                    <div className="text-center text-gray-400 py-8">
+                      <div className="text-lg mb-2">No Orders</div>
+                      <div className="text-sm">Your orders will appear here</div>
+                    </div>
+                  ) : (
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-700">
+                          <th className="text-left p-4 text-gray-400 font-medium">Symbol</th>
+                          <th className="text-left p-4 text-gray-400 font-medium">Side</th>
+                          <th className="text-right p-4 text-gray-400 font-medium">Amount</th>
+                          <th className="text-right p-4 text-gray-400 font-medium">Price</th>
+                          <th className="text-center p-4 text-gray-400 font-medium">Status</th>
+                          <th className="text-right p-4 text-gray-400 font-medium">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {orders.slice(0, 5).map((order) => (
+                          <tr key={order.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                            <td className="p-4">
+                              <div className="text-white font-medium">{order.intent.symbol}</div>
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                order.intent.side === 'buy' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
+                              }`}>
+                                {order.intent.side.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="text-white font-mono">{order.executedAmount.toFixed(4)}</div>
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="text-white font-mono">${order.executedPrice.toFixed(2)}</div>
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                order.status === 'filled' ? 'bg-green-600/20 text-green-400' :
+                                order.status === 'rejected' ? 'bg-red-600/20 text-red-400' :
+                                'bg-yellow-600/20 text-yellow-400'
+                              }`}>
+                                {order.status.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="text-gray-400 text-sm">
+                                {new Date(order.timestamp).toLocaleTimeString()}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              {orders.length === 0 ? (
-                <div className="text-center text-gray-400 py-8">
-                  <div className="text-lg mb-2">No Orders</div>
-                  <div className="text-sm">Your orders will appear here</div>
-                </div>
-              ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-700">
-                      <th className="text-left p-4 text-gray-400 font-medium">Symbol</th>
-                      <th className="text-left p-4 text-gray-400 font-medium">Side</th>
-                      <th className="text-right p-4 text-gray-400 font-medium">Amount</th>
-                      <th className="text-right p-4 text-gray-400 font-medium">Price</th>
-                      <th className="text-center p-4 text-gray-400 font-medium">Status</th>
-                      <th className="text-right p-4 text-gray-400 font-medium">Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.slice(0, 5).map((order) => (
-                      <tr key={order.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                        <td className="p-4">
-                          <div className="text-white font-medium">{order.intent.symbol}</div>
-                        </td>
-                        <td className="p-4">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            order.intent.side === 'buy' ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'
-                          }`}>
-                            {order.intent.side.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="text-white font-mono">{order.executedAmount.toFixed(4)}</div>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="text-white font-mono">${order.executedPrice.toFixed(2)}</div>
-                        </td>
-                        <td className="p-4 text-center">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${
-                            order.status === 'filled' ? 'bg-green-600/20 text-green-400' :
-                            order.status === 'rejected' ? 'bg-red-600/20 text-red-400' :
-                            'bg-yellow-600/20 text-yellow-400'
-                          }`}>
-                            {order.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="text-gray-400 text-sm">
-                            {new Date(order.timestamp).toLocaleTimeString()}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+            {/* Signal Log */}
+            <div>
+              <SignalEventLog signals={strategySignals} />
             </div>
           </div>
-        </div>
+        </TabsContent>
 
-        {/* Signal Log */}
-        <div>
-          <SignalEventLog signals={strategySignals} />
-        </div>
-      </div>
+        <TabsContent value="backtest" className="mt-6">
+          <div className="text-center py-12">
+            <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">Backtesting Platform</h3>
+            <p className="text-gray-400">Simulate trading strategies on historical data</p>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="strategy-optimizer" className="mt-6">
+          <div className="text-center py-12">
+            <Target className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">Strategy Optimizer</h3>
+            <p className="text-gray-400">Optimize trading strategy parameters</p>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="portfolio" className="mt-6">
+            <div className="text-center py-12">
+              <Briefcase className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-white mb-2">Portfolio Management</h3>
+              <p className="text-gray-400">Track and manage your trading portfolios</p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="ai" className="mt-6">
+            {aiEnabled ? (
+              <div className="space-y-6">
+                <div className="bg-gray-800 rounded-xl p-6">
+                  <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+                    <Brain className="h-6 w-6 text-cyan-400 mr-2" />
+                    AI Trading Assistant
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-semibold text-white mb-2">Market Sentiment</h4>
+                      <div className="text-sm text-gray-300">Current: <span className="text-green-400">Bullish (78%)</span></div>
+                    </div>
+                    <div className="bg-gray-700 p-4 rounded-lg">
+                      <h4 className="font-semibold text-white mb-2">AI Recommendation</h4>
+                      <div className="text-sm text-gray-300">Action: <span className="text-cyan-400">Hold Positions</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-center py-8">
+                  <p className="text-gray-400">AI features are active. Advanced trading insights available.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <Lock className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-white mb-2">AI Features Locked</h3>
+                <p className="text-gray-400 mb-4">Upgrade to unlock advanced AI trading capabilities</p>
+                <Button 
+                  onClick={() => window.open('/ai', '_blank')}
+                  className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600"
+                >
+                  Upgrade to AI Plan
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+      </Tabs>
 
       {/* Settings Panel */}
       <SettingsPanel

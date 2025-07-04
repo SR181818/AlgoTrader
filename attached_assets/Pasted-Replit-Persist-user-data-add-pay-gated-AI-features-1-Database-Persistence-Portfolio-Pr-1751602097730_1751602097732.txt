@@ -1,0 +1,37 @@
+Replit: "Persist user data & add pay‐gated AI features:
+
+1. Database Persistence  
+ • Portfolio & Profiles:  
+   – In your Express backend, extend the Users table (Drizzle schema) to include portfolio JSON and saved strategies.  
+   – On portfolio CRUD endpoints (e.g. POST/PUT /api/portfolio), save the portfolio state under the authenticated user’s email.  
+   – Create GET /api/portfolio and GET /api/strategies to fetch per‐user data.
+
+ • Strategy Builder Storage:  
+   – When a user saves a strategy, POST its config to /api/strategies with user email and metadata.  
+   – Store in a new Strategies table.  
+   – In the live trading UI, call GET /api/strategies and list the user’s saved strategies for selection.
+
+2. Algorand Paywall  
+ • Payment Endpoint:  
+   – Create POST /api/paywall/checkout that spins up an Algorand TEAL contract transaction (TestNet or MainNet) for the “AI” plan.  
+   – Use algosdk to generate the payment transaction and return the signed TX to the frontend.
+
+ • Webhook & Unlock:  
+   – Add POST /api/paywall/confirm to verify the transaction on-chain via Algorand Indexer, then flag the user’s DB record as ai_enabled = true.
+
+3. Frontend UI Changes  
+ • Navbar Tabs:  
+   – Add an “AI” tab alongside existing tabs.  
+   – If the logged‐in user’s ai_enabled = false, show the tab as locked (disabled icon + tooltip “Upgrade for AI features”).  
+   – If ai_enabled = true, route /ai to a minimal AI placeholder page.
+
+ • Live Trading Strategy List:  
+   – In your React live‐trading component, fetch the user’s saved strategies and display them in a dropdown.  
+   – On select, load the strategy config into StrategyRunner and update the UI.
+
+4. Security & Validation  
+ • Protect all new endpoints with JWT auth middleware.  
+ • Add Zod schemas for portfolio, strategies, and paywall payloads.  
+ • Handle all errors gracefully and return consistent JSON responses.
+
+Ensure full TypeScript types on both client and server, and add unit tests for the new persistence and paywall flows."  
